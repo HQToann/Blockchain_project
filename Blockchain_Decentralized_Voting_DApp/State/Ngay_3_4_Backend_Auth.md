@@ -33,6 +33,20 @@ Tạo file `.env` ngang hàng với file `manage.py` và điền biến bảo m�
 # === WEB3 AUTH ===
 # CHÚ Ý: Địa chỉ ví này PHẢI GIỐNG 100% với ví Kỹ sư Blockchain đã dùng để deploy Factory ở Ngày 1-2!
 ADMIN_WALLET_ADDRESS=0xDiaChiViMetaMask_CuaAdmin_VietThuongKhongDauKhongCoKhoangTrang
+
+# === DATABASE ===
+# Đổi thành False khi đưa lên Production để dùng PostgreSQL
+USE_SQLITE=True 
+
+DB_NAME=voting_db
+DB_USER=postgres
+DB_PASSWORD=nhap_mat_khau_postgres_cua_ban_vao_day
+DB_HOST=localhost
+DB_PORT=5432
+
+# === DJANGO SECURITY & SESSION ===
+DJANGO_SECRET_KEY=mot_chuoi_ky_tu_bi_mat_bat_ky_dai_chut
+SESSION_COOKIE_AGE=86400
 ```
 
 ---
@@ -49,6 +63,9 @@ from dotenv import load_dotenv
 load_dotenv() # Đọc file .env
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Bảo mật Secret Key
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -70,21 +87,31 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# Cấu hình Database PostgreSQL
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'voting_db',
-        'USER': 'postgres',
-        'PASSWORD': '123', # Đổi thành pass của bạn
-        'HOST': 'localhost',
-        'PORT': '5432',
+# Cấu hình Database linh hoạt (Test: SQLite | Prod: PostgreSQL)
+USE_SQLITE = os.environ.get('USE_SQLITE', 'True') == 'True'
+
+if USE_SQLITE:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME'),
+            'USER': os.environ.get('DB_USER'),
+            'PASSWORD': os.environ.get('DB_PASSWORD'),
+            'HOST': os.environ.get('DB_HOST'),
+            'PORT': os.environ.get('DB_PORT'),
+        }
+    }
 
 # Cấu hình Session
 SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
-SESSION_COOKIE_AGE = 86400  # Session đăng nhập sống 1 ngày (tránh bị out giữa chừng khi Demo)
+SESSION_COOKIE_AGE = int(os.environ.get('SESSION_COOKIE_AGE', 86400))  # Lấy từ .env, mặc định 1 ngày
 
 > [!WARNING]
 > **Lưu ý Bảo mật (Dành cho Q&A):** Việc dùng Cookie Session cho API và tắt CSRF (`@csrf_exempt`) là để làm Demo/Đồ án nhanh. Trong thực tế, hệ thống nên chuyển sang dùng **JWT (gửi qua Header Authorization)** để miễn nhiễm hoàn toàn với CSRF!
@@ -110,7 +137,15 @@ TEMPLATES = [
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]  # Chỉ đường tới thư mục static/
 STATIC_URL = '/static/'
 ```
-*Lưu ý: Bạn nhớ mở pgAdmin lên và tạo một Database trống tên là `voting_db` trước nhé.*
+> [!TIP]
+> **HƯỚNG DẪN CHUYỂN SANG POSTGRESQL NGAY BÂY GIỜ**
+> Hệ thống hiện tại đang tự động chạy bằng SQLite (môi trường test) để giúp bạn code nhanh. Nếu bạn muốn thực hành đấu nối thẳng vào PostgreSQL chuyên nghiệp ngay lúc này, hãy tự tay làm 4 thao tác sau:
+> 1. Tạo Database tên là `voting_db`. Bạn có thể chọn 1 trong 2 cách:
+>    - **Cách 1 (Giao diện):** Mở pgAdmin 4, click chuột phải vào Databases -> Create -> Database... và đặt tên là `voting_db`.
+>    - **Cách 2 (Dùng Terminal VS Code):** Gõ lệnh `psql -U postgres` (Nhập mật khẩu nếu được hỏi). Khi màn hình đổi thành `postgres=#`, gõ lệnh `CREATE DATABASE voting_db;`. Cuối cùng gõ `\q` để thoát.
+> 2. Mở file `.env`, sửa dòng `USE_SQLITE=True` thành `USE_SQLITE=False`. 
+> 3. Kiểm tra dòng `DB_PASSWORD` trong `.env` xem đã điền đúng mật khẩu PostgreSQL của bạn chưa.
+> 4. Chạy lệnh `pipenv run python manage.py migrate` để đẩy toàn bộ cấu trúc bảng vào PostgreSQL.
 
 ---
 

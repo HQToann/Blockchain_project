@@ -8,8 +8,8 @@ Với 3 tính năng nâng cấp (Factory, SIWE, WebSockets), lộ trình triển
 *Mục tiêu: Viết và Deploy bộ Hợp đồng thông minh lên Sepolia.*
 
 - [ ] Cài đặt MetaMask, nhận Sepolia ETH.
-- [ ] Mở Remix IDE, viết ElectionFactory.sol và Election.sol.
-- [ ] Chạy thử (Test) trên môi trường ảo (Remix VM).
+- [ ] Khởi tạo môi trường Hardhat, viết `ElectionFactory.sol` và `Election.sol` trong VS Code.
+- [ ] Biên dịch (Compile) bằng Hardhat CLI (`npx hardhat compile`).
 - [ ] Deploy ElectionFactory lên mạng lưới Sepolia.
 - [ ] Lưu lại Contract Address và ABI (của cả 2 contract).
 
@@ -36,7 +36,7 @@ Với 3 tính năng nâng cấp (Factory, SIWE, WebSockets), lộ trình triển
 - [ ] Tạo script indexer.py độc lập.
 - [ ] Lắng nghe 2 sự kiện: ElectionCreated (từ Factory) và VoteCast (từ Election).
 - [ ] Bọc code lưu Database vào `transaction.atomic()`.
-- [ ] Test: Bầu trên Remix -> Indexer nhận diện -> Database tăng phiếu.
+- [ ] Test: Bầu qua Admin Dashboard hoặc Etherscan -> Indexer nhận diện -> Database tăng phiếu.
 
 ## 🟢 NGÀY 8: WEBSOCKETS (Backend Engineer + Frontend Engineer)
 *Mục tiêu: Cấu hình ASGI để đẩy dữ liệu Real-time.*

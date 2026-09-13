@@ -9,7 +9,7 @@ Dự án này sử dụng kiến trúc phân tán (Decentralized) kết hợp v�
 Người nắm giữ "Trái tim" của hệ thống — Đảm bảo tính bất biến, minh bạch và an toàn của phiếu bầu.
 
 ### Nhiệm Vụ Cốt Lõi:
-1. **Viết Smart Contract:** Code `ElectionFactory.sol` và `Election.sol` trên Remix IDE.
+1. **Viết Smart Contract:** Code `ElectionFactory.sol` và `Election.sol` bằng Hardhat trong VS Code.
 2. **Kiểm định bảo mật:** Bắt lỗi Reentrancy, kiểm tra phân quyền `onlyAdmin`.
 3. **Triển khai (Deploy):** Bơm tiền Sepolia ETH và đưa hợp đồng lên mạng lưới Ethereum Testnet. Cung cấp **Contract Address** và **ABI** cho 2 thành viên còn lại.
 4. **Viết Indexer:** Code file `indexer.py` (Python) dùng thư viện `web3.py`. Lắng nghe Event 24/7 và bọc `transaction.atomic()` khi đẩy dữ liệu vào Database của Backend.

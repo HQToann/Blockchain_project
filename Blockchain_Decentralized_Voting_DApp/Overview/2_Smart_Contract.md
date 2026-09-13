@@ -73,9 +73,9 @@ event CandidateAdded(uint256 indexed candidateId, string name);
 ---
 
 ## 2.5. Quy Trình Deploy Thực Tế
-1. Mở [Remix IDE](https://remix.ethereum.org/).
-2. Tạo file `VotingSystem.sol` chứa cả 2 contract trên.
-3. Chọn môi trường **Injected Provider - MetaMask**, mạng **Sepolia**.
-4. Chọn Contract **`ElectionFactory`** (Không chọn `Election`).
-5. Bấm **Deploy**.
+1. Cài đặt và code bằng **Hardhat** trực tiếp trong VS Code.
+2. Cấu hình `hardhat.config.js` để kết nối mạng **Sepolia** (qua Alchemy RPC) và nạp Private Key (từ `.env`).
+3. Chạy lệnh `npx hardhat compile` để biên dịch file `VotingSystem.sol`.
+4. Viết script `ignition/modules/Factory.js` chỉ định deploy `ElectionFactory`.
+5. Chạy lệnh deploy: `npx hardhat ignition deploy... --network sepolia`.
 6. ✅ **LƯU LẠI ngay:** `Contract Address` của Factory và `ABI` (cả 2 ABI). Lắp vào Backend.

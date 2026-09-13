@@ -9,7 +9,7 @@
 |:---|:---|:---|
 | **Solidity** | ^0.8.20 | Ngôn ngữ viết Smart Contract |
 | **OpenZeppelin Contracts** | v5 | Thư viện bảo mật chuẩn công nghiệp (`Ownable`, `Pausable`) |
-| **Remix IDE** | Latest | Môi trường viết, compile và deploy Contract trên trình duyệt |
+| **Hardhat** | ^2.22.x | Môi trường viết, compile và deploy Contract trực tiếp trên VS Code |
 | **Sepolia Testnet** | — | Mạng Ethereum thử nghiệm, phí Gas là tiền giả (faucet) |
 | **MetaMask** | Latest | Ví điện tử để ký giao dịch, đóng vai Cử tri và Admin |
 | **Alchemy** | — | Nhà cung cấp RPC Node kết nối vào mạng Sepolia |
