@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard</title>
+    <!-- Tải ethers.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+</head>
+<body>
+    <h1>Quản Trị Bầu Cử (Admin)</h1>
+    
+    <!-- Nút kết nối Admin -->
+    <button onclick="loginAdminSIWE()">Đăng Nhập Web3 (Admin)</button>
+    <hr>
+
+    <!-- Form tạo Election -->
+    <h2>1. Tạo Cuộc Bầu Cử Mới</h2>
+    <input type="text" id="pollName" placeholder="Tên cuộc bầu cử (VD: Lớp 12A1)">
+    <label><input type="checkbox" id="isPrivate"> Private Poll (Bầu kín)</label>
+    <button onclick="handleCreateElection()">Tạo Hòm Phiếu (Gọi Factory)</button>
+
+    <hr>
+    
+    <h2>2. Danh sách các hòm phiếu (Ví dụ tĩnh)</h2>
+    <p><i>Trong thực tế, bạn sẽ dùng fetch('/api/elections/') để render danh sách này bằng JS. Dưới đây là 1 dòng ví dụ để có nút bấm:</i></p>
+    
+    <table border="1">
+        <tr>
+            <th>Tên Hòm Phiếu</th>
+            <th>Contract Address</th>
+            <th>Hành động</th>
+        </tr>
+        <tr>
+            <td>Bầu Trưởng Thôn</td>
+            <td>0x123...abc</td>
+            <td>
+                <!-- Form Thêm Ứng Viên Đồng Bộ -->
+                <input type="text" id="candName" placeholder="Tên ứng viên">
+                <input type="file" id="candFile" accept="image/*">
+                <!-- dbElectionId = 1, ContractAddr = 0x123...abc, candidateIdOnChain = 0 -->
+                <button onclick="submitCandidate(1, '0x123...abc', 0)">Thêm Ứng Viên A (ID=0)</button>
+                <br><br>
+                <!-- Gọi hàm startElection -->
+                <button onclick="startElection('0x123...abc')">Mở Hòm Phiếu</button>
+            </td>
+        </tr>
+    </table>
+
+    <script src="/static/js/admin.js"></script>
+    <script>
+        // Hàm bọc để lấy dữ liệu từ Form truyền vào admin.js
+        function handleCreateElection() {
+            const name = document.getElementById("pollName").value;
+            const isPrivate = document.getElementById("isPrivate").checked;
+            createElectionOnChain(name, isPrivate);
+        }
+        
+        // Hàm bọc để lấy Form thêm ứng viên
+        function submitCandidate(dbElectionId, contractAddr, candidateIdOnChain) {
+            const name = document.getElementById("candName").value;
+            const file = document.getElementById("candFile").files[0];
+            if (!file) return alert("Vui lòng chọn ảnh!");
+            handleAddCandidate(dbElectionId, contractAddr, candidateIdOnChain, name, file);
+        }
+    </script>
+</body>
+</html>

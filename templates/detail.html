@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chi Tiết Bầu Cử</title>
+    <!-- Thư viện Ethers.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+    <!-- Thư viện Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1 id="electionName">Đang tải...</h1>
+    
+    <button id="btnConnect" onclick="connectWallet()">Kết Nối MetaMask</button>
+    <p id="walletAddress"></p>
+
+    <!-- Biểu đồ -->
+    <div style="width: 400px; height: 400px;">
+        <canvas id="voteChart"></canvas>
+    </div>
+
+    <!-- Danh sách ứng viên để Vote -->
+    <div id="candidateList"></div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
