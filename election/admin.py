@@ -15,12 +15,12 @@ admin_address = w3.eth.account.from_key(admin_private_key).address if admin_priv
 
 FACTORY_ADDRESS = "0x44F8Db431EA5049D60547777Af54a0D7E46D12DE"
 
-# Tải ABI tự động từ file JSON giống như Indexer
-with open("artifacts/contracts/VotingSystem.sol/ElectionFactory.json", "r", encoding="utf-8") as f:
-    FACTORY_ABI = json.load(f)["abi"]
+# Tải ABI từ file JSON tĩnh ở thư mục gốc (Vì thư mục artifacts không được push lên GitHub)
+with open("Factory_ABI.json", "r", encoding="utf-8") as f:
+    FACTORY_ABI = json.load(f)
 
-with open("artifacts/contracts/VotingSystem.sol/Election.json", "r", encoding="utf-8") as f:
-    ELECTION_ABI = json.load(f)["abi"]
+with open("Election_ABI.json", "r", encoding="utf-8") as f:
+    ELECTION_ABI = json.load(f)
 
 # --- ADMIN FORMS ---
 class CandidateForm(forms.ModelForm):

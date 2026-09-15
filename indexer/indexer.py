@@ -22,15 +22,15 @@ w3 = Web3(Web3.HTTPProvider(os.getenv('ALCHEMY_RPC_URL')))
 
 import json
 
-# Tự động tải ABI từ thư mục artifacts do Hardhat sinh ra
+# Tải ABI từ file JSON tĩnh ở thư mục gốc (Vì thư mục artifacts không được push lên GitHub)
 try:
-    with open("artifacts/contracts/VotingSystem.sol/ElectionFactory.json", "r", encoding="utf-8") as f:
-        FACTORY_ABI = json.load(f)["abi"]
+    with open("Factory_ABI.json", "r", encoding="utf-8") as f:
+        FACTORY_ABI = json.load(f)
 
-    with open("artifacts/contracts/VotingSystem.sol/Election.json", "r", encoding="utf-8") as f:
-        ELECTION_ABI = json.load(f)["abi"]
+    with open("Election_ABI.json", "r", encoding="utf-8") as f:
+        ELECTION_ABI = json.load(f)
 except FileNotFoundError:
-    print("❌ Lỗi: Không tìm thấy file ABI! Bạn cần chạy 'npx hardhat compile' trước.")
+    print("❌ Lỗi: Không tìm thấy file Factory_ABI.json hoặc Election_ABI.json ở thư mục gốc!")
     sys.exit(1)
 
 # Địa chỉ Factory Contract (tự động trích xuất từ file deployed_addresses.json)
