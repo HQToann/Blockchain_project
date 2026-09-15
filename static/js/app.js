@@ -210,7 +210,8 @@ function renderCandidateButtons() {
 
 // 7. WEBSOCKET REAL-TIME (Cập nhật không giật lag)
 function setupWebSocket() {
-    const wsUrl = `ws://${window.location.host}/ws/election/${ELECTION_ID}/`;
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+    const wsUrl = `${wsProtocol}${window.location.host}/ws/election/${ELECTION_ID}/`;
     const socket = new WebSocket(wsUrl);
 
     socket.onmessage = async function(e) {

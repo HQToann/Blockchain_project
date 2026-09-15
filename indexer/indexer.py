@@ -135,7 +135,8 @@ def process_events():
                         
                         # --- Bắn tín hiệu WebSocket (Real-time) cho Frontend qua API ---
                         try:
-                            requests.post(f"http://127.0.0.1:8000/api/internal/notify_vote/", json={
+                            server_port = os.environ.get('PORT', 8000)
+                            requests.post(f"http://127.0.0.1:{server_port}/api/internal/notify_vote/", json={
                                 "election_id": election.id,
                                 "candidate_id": candidate_id,
                                 "tx_hash": tx_hash
