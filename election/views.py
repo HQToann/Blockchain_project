@@ -77,7 +77,7 @@ def verify_signature(request):
                 del request.session['auth_nonce']
                 
                 # KIỂM TRA QUYỀN ADMIN (Chống ai cũng login được)
-                admin_wallet = os.getenv("ADMIN_WALLET_ADDRESS", "").lower()
+                admin_wallet = os.getenv("ADMIN_WALLET_ADDRESS", "").strip().lower()
                 if recovered_address.lower() != admin_wallet:
                     return JsonResponse({'error': 'Ví này không phải là Admin hệ thống!'}, status=403)
 
