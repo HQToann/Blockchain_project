@@ -21,5 +21,8 @@ services:
         sync: false
       - key: PRIVATE_KEY
         sync: false
-
+      - key: ADMIN_WALLET_ADDRESS
+        sync: false
+      - key: PINATA_JWT
+        sync: false
 
