@@ -1,11 +1,4 @@
 services:
-  # 1. Trạm Trung Chuyển (Message Broker)
-  - type: redis
-    name: voting-redis
-    ipAllowList: []
-    plan: free
-    maxmemoryPolicy: noeviction
-
   # 2. Dịch vụ Web Chính (Django)
   - type: web
     name: voting-dapp-web
@@ -17,10 +10,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.0
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: voting-redis
-          property: connectionString
+        value: redis://red-dahpp6942hec739vn7gg:6379
       - key: DJANGO_SECRET_KEY
         generateValue: true
       - key: USE_SQLITE

@@ -119,6 +119,7 @@ if REDIS_URL:
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
                 "hosts": [REDIS_URL],
+                "prefix": "blockchain_voting:",
             },
         }
     }
