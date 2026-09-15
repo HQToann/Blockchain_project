@@ -4,8 +4,7 @@ set -o errexit
 
 echo "📦 Đang cài đặt thư viện..."
 python -m pip install --upgrade pip
-pip install pipenv
-pipenv install --system --deploy
+pip install -r requirements.txt
 
 echo "📦 Gộp file tĩnh (CSS/JS)..."
 python manage.py collectstatic --no-input
