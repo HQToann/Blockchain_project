@@ -16,8 +16,6 @@ __pycache__/
 db.sqlite3
 .venv/
 venv/
-Pipfile
-Pipfile.lock
 
 # RoatMap
 Blockchain_Decentralized_Voting_DApp/
