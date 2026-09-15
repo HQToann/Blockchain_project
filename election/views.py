@@ -5,11 +5,38 @@ import time
 
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth import login
+from django.contrib.auth.models import User
 from eth_account.messages import encode_defunct
 from web3 import Web3
 
-from .models import Election, Candidate, VoteRecord
+from django.shortcuts import render
+from .models import Election, Candidate, VoteRecord, SystemLog
 from .services import upload_image_to_ipfs
+
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+
+# -- LOGGING SYSTEM --
+def system_logs(request):
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    return render(request, 'logs.html')
+
+def get_latest_logs(request):
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    
+    logs = SystemLog.objects.all()[:50] # Lấy 50 log mới nhất
+    logs_data = []
+    for log in logs:
+        logs_data.append({
+            'timestamp': log.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            'level': log.level,
+            'module': log.module,
+            'message': log.message
+        })
+    return JsonResponse({'logs': logs_data})
 
 # 1. API Cấp mã ngẫu nhiên (Nonce)
 @csrf_exempt
@@ -54,11 +81,20 @@ def verify_signature(request):
                 if recovered_address.lower() != admin_wallet:
                     return JsonResponse({'error': 'Ví này không phải là Admin hệ thống!'}, status=403)
 
-                # Chữ ký hợp lệ & đúng Admin! Đánh dấu đăng nhập thành công
+                # Tích hợp vào hệ thống Authentication của Django Admin
+                user, created = User.objects.get_or_create(username=admin_wallet)
+                if created:
+                    user.is_staff = True
+                    user.is_superuser = True
+                    user.save()
+                
+                # Hàm login của Django (tạo Cookie session cho Admin)
+                login(request, user)
+                
                 request.session['is_admin'] = True
                 request.session['wallet'] = recovered_address
                 
-                return JsonResponse({'success': True, 'wallet': recovered_address})
+                return JsonResponse({'success': True, 'wallet': recovered_address, 'redirect': '/admin/'})
             else:
                 return JsonResponse({'error': 'Invalid signature'}, status=401)
         except Exception as e:
@@ -151,3 +187,28 @@ def create_candidate(request, election_id):
         return JsonResponse({'error': f'Thiếu trường: {e}'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def internal_notify_vote(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            election_id = data.get('election_id')
+            candidate_id = data.get('candidate_id')
+            tx_hash = data.get('tx_hash')
+            
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'election_{election_id}',
+                {
+                    'type': 'send_vote_update',
+                    'message': {
+                        'candidate_id': candidate_id,
+                        'tx_hash': tx_hash
+                    }
+                }
+            )
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    return JsonResponse({'error': 'POST only'}, status=405)

@@ -92,6 +92,12 @@ class WhitelistVoter(models.Model):
 | `POST` | `/api/elections/<id>/candidates/` | ⭐ **Tạo ứng viên trong Django DB** (phải thực hiện TRƯỚC khi gọi `addCandidate()` trên Smart Contract!) |
 | `POST` | `/api/upload/` | Tải ảnh lên IPFS, nhận về CID |
 
+### Internal Webhook APIs (Giao tiếp Đa Luồng)
+
+| Method | Endpoint | Mô tả |
+|:---|:---|:---|
+| `POST` | `/api/internal/notify_vote/` | API bảo mật chỉ dành cho `indexer.py` gọi sang Django Server để kích hoạt đẩy luồng WebSocket xuống Frontend mỗi khi có giao dịch mới (khắc phục lỗi Cross-Process trên Render). |
+
 ---
 
 ## 3.4. Mô Hình Kiến Trúc "Service Layer"
@@ -229,6 +235,9 @@ urlpatterns = [
     path('api/elections/', views.get_elections),
     path('api/elections/<int:election_id>/', views.get_election_detail),
     path('api/elections/<int:election_id>/candidates/', views.create_candidate),
+
+    # Webhook nội bộ
+    path('api/internal/notify_vote/', views.internal_notify_vote),
 ]
 ```
 

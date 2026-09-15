@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Monitor</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .header {
+            background-color: #161b22;
+            padding: 15px 20px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.2rem;
+            color: #58a6ff;
+        }
+        .header .status {
+            color: #3fb950;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background-color: #3fb950;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(63, 185, 80, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); }
+        }
+        .console {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: #0d1117;
+        }
+        .log-entry {
+            margin-bottom: 8px;
+            line-height: 1.5;
+            font-size: 0.95rem;
+            word-wrap: break-word;
+        }
+        .timestamp { color: #8b949e; margin-right: 15px; }
+        .module { color: #d2a8ff; margin-right: 15px; font-weight: bold; width: 120px; display: inline-block;}
+        
+        .level-INFO { color: #58a6ff; }
+        .level-SUCCESS { color: #3fb950; }
+        .level-WARNING { color: #e3b341; }
+        .level-ERROR { color: #f85149; }
+        
+        .message { color: #c9d1d9; }
+        
+        /* Chống nháy thanh cuộn */
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #0d1117; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #8b949e; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>>_ SYSTEM MONITOR</h1>
+        <div class="status">
+            <div class="status-dot"></div>
+            System is active & recording
+        </div>
+    </div>
+
+    <div class="console" id="console">
+        <!-- Logs will be injected here -->
+        <div class="log-entry"><span class="timestamp">[SYS]</span> <span class="message">Initializing Secure Log Stream...</span></div>
+    </div>
+
+    <script>
+        const consoleEl = document.getElementById('console');
+        let autoScroll = true;
+
+        // Cho phép cuộn ngược lên xem log cũ mà không bị giật xuống lại
+        consoleEl.addEventListener('scroll', () => {
+            const isAtBottom = consoleEl.scrollHeight - consoleEl.scrollTop <= consoleEl.clientHeight + 10;
+            autoScroll = isAtBottom;
+        });
+
+        async function fetchLogs() {
+            try {
+                const res = await fetch('/api/logs/');
+                const data = await res.json();
+                
+                if (data.logs) {
+                    consoleEl.innerHTML = ''; // Xóa hết và render lại (vì dữ liệu đã sort theo giảm dần, ta đảo ngược lại)
+                    const reversedLogs = data.logs.reverse();
+                    
+                    reversedLogs.forEach(log => {
+                        const div = document.createElement('div');
+                        div.className = 'log-entry';
+                        div.innerHTML = `
+                            <span class="timestamp">[${log.timestamp}]</span>
+                            <span class="module">[${log.module}]</span>
+                            <span class="level-${log.level} message">${log.message}</span>
+                        `;
+                        consoleEl.appendChild(div);
+                    });
+
+                    if (autoScroll) {
+                        consoleEl.scrollTop = consoleEl.scrollHeight;
+                    }
+                }
+            } catch (err) {
+                console.error("Lỗi fetch log:", err);
+            }
+        }
+
+        // Lấy log mỗi 2 giây
+        setInterval(fetchLogs, 2000);
+        fetchLogs(); // Chạy ngay lần đầu
+    </script>
+</body>
+</html>

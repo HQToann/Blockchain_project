@@ -59,3 +59,12 @@ Với 3 tính năng nâng cấp (Factory, SIWE, WebSockets), lộ trình triển
 - [ ] Chạy luồng Full: Đăng nhập SIWE -> Tạo bầu cử (Factory) -> Ứng viên (IPFS) -> Vote (MetaMask) -> Chart nhảy số (WebSockets).
 - [ ] Test lỗi: Người dùng từ chối giao dịch, lỗi rớt mạng.
 - [ ] Chuẩn bị kịch bản báo cáo và Slide.
+
+## 🟢 NGÀY 11: MỞ RỘNG - ĐƯA LÊN MÂY (PRODUCTION DEPLOYMENT)
+*Mục tiêu: Đưa hệ thống lên môi trường Internet thực tế với Render và Supabase.*
+
+- [ ] Thay thế SQLite bằng **Supabase PostgreSQL** qua `dj-database-url`.
+- [ ] Phục vụ file tĩnh (CSS/JS) tự động qua `whitenoise`.
+- [ ] Thiết lập hệ thống **Render (Blueprint)** bằng file `render.yaml` và `build.sh`.
+- [ ] Tách Indexer thành **Background Worker** chạy song song với máy chủ Web.
+- [ ] Sử dụng **Redis** qua `channels_redis` để kết nối WebSocket giữa đa luồng.

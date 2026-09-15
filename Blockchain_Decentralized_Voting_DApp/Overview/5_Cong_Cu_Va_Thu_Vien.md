@@ -37,8 +37,12 @@
 ### ☁️ Dịch vụ Ngoài
 | Dịch vụ | Vai trò |
 |:---|:---|
+| **Render (Web/Worker)** | Nền tảng Cloud tự động build và chạy Server/Indexer. |
+| **Supabase (PostgreSQL)** | Cung cấp Database PostgreSQL đám mây (thay cho SQLite). |
 | **Pinata Cloud (IPFS)** | Lưu trữ ảnh ứng viên phân tán (Chống kiểm duyệt) |
 | **Django Channels + Redis** | Hỗ trợ WebSockets, đẩy dữ liệu Real-time xuống trình duyệt |
+| **WhiteNoise** | Tự động hóa việc nén và phục vụ file CSS/JS trên Production |
+| **dj-database-url** | Tự động phân tích chuỗi kết nối Database từ biến môi trường |
 | **eth-account** | Xác thực chữ ký số MetaMask (Web3 Auth) tại Backend |
 | **Etherscan (Sepolia)** | Tra cứu công khai giao dịch bỏ phiếu |
 
@@ -119,6 +123,10 @@ PINATA_JWT=Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ALCHEMY_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/ma_api_key_cua_ban
 FACTORY_CONTRACT_ADDRESS=0xDia_chi_ElectionFactory_sau_khi_deploy
 ADMIN_WALLET_ADDRESS=0xDiaChiMetaMask_CuaAdmin_CuaBan
+
+# === PRODUCTION (Render/Supabase) ===
+DATABASE_URL=postgresql://postgres:xxx@db.xxxx.supabase.co:5432/postgres
+REDIS_URL=redis://red-xxx:6379
 ```
 
 ---

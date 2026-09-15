@@ -1,0 +1,90 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <style>
+        /* Ghi đè giao diện Django Admin */
+        body { background: var(--bg-color); color: var(--text-primary); text-align: center; }
+        #header, #content-main, .submit-row { display: none; } /* Ẩn các thành phần cũ */
+        .web3-login-container {
+            margin: 100px auto;
+            max-width: 400px;
+            padding: 40px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(16px);
+        }
+        .web3-login-container h2 { margin-bottom: 30px; font-size: 1.5rem; }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="web3-login-container">
+    <h2>🔐 Đăng Nhập Quản Trị Web3</h2>
+    <p style="margin-bottom: 20px;">Vui lòng kết nối ví Admin (MetaMask) để truy cập hệ thống.</p>
+    <button id="btnConnectAdmin" class="btn btn-admin" style="width: 100%;">🦊 Kết Nối MetaMask</button>
+    <p id="adminStatus" style="margin-top: 15px; font-weight: bold; color: var(--danger-color);"></p>
+</div>
+
+<!-- Ethers.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+<script>
+    document.getElementById('btnConnectAdmin').addEventListener('click', async () => {
+        const statusText = document.getElementById('adminStatus');
+        
+        if (!window.ethereum) {
+            statusText.innerText = "Chưa cài đặt MetaMask!";
+            return;
+        }
+
+        try {
+            statusText.innerText = "Đang kết nối ví...";
+            statusText.style.color = "var(--accent-color)";
+
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            await provider.send("eth_requestAccounts", []);
+            const signer = await provider.getSigner();
+            const address = await signer.getAddress();
+            
+            statusText.innerText = "Vui lòng ký xác nhận trên MetaMask...";
+
+            // Lấy Nonce từ Backend
+            const nonceRes = await fetch('/api/auth/nonce/');
+            const nonceData = await nonceRes.json();
+            
+            // Yêu cầu ký
+            const signature = await signer.signMessage(nonceData.nonce);
+            
+            statusText.innerText = "Đang xác thực với Backend...";
+            
+            // Xác thực
+            const verifyRes = await fetch('/api/auth/verify/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ address: address, signature: signature })
+            });
+            const verifyData = await verifyRes.json();
+            
+            if (verifyData.success) {
+                statusText.innerText = "Đăng nhập thành công! Đang chuyển hướng...";
+                statusText.style.color = "var(--success-color)";
+                // Chuyển hướng vào trang Admin (dựa trên URL next nếu có, hoặc vào trang chủ admin)
+                const urlParams = new URLSearchParams(window.location.search);
+                const nextUrl = urlParams.get('next') || '/admin/';
+                window.location.href = nextUrl;
+            } else {
+                statusText.innerText = "Lỗi: " + verifyData.error;
+                statusText.style.color = "var(--danger-color)";
+            }
+        } catch (e) {
+            console.error(e);
+            statusText.innerText = "Lỗi: Đã hủy ký hoặc lỗi ví.";
+            statusText.style.color = "var(--danger-color)";
+        }
+    });
+</script>
+{% endblock %}

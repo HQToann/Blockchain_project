@@ -1,0 +1,53 @@
+services:
+  # 1. Trạm Trung Chuyển (Message Broker)
+  - type: redis
+    name: voting-redis
+    ipAllowList: []
+    plan: free
+    maxmemoryPolicy: noeviction
+
+  # 2. Dịch vụ Web Chính (Django)
+  - type: web
+    name: voting-dapp-web
+    env: python
+    buildCommand: "./build.sh"
+    startCommand: "daphne -b 0.0.0.0 -p $PORT core.asgi:application"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: voting-redis
+          property: connectionString
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: USE_SQLITE
+        value: "False"
+      - key: DATABASE_URL
+        sync: false # Nhập tay từ Supabase trên Dashboard
+      - key: ALCHEMY_RPC_URL
+        sync: false
+      - key: PRIVATE_KEY
+        sync: false
+
+  # 3. Máy Quét Blockchain Chạy Ngầm (Indexer)
+  - type: worker
+    name: voting-indexer
+    env: python
+    buildCommand: "./build.sh"
+    startCommand: "python indexer/indexer.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: voting-redis
+          property: connectionString
+      - key: USE_SQLITE
+        value: "False"
+      - key: DATABASE_URL
+        sync: false
+      - key: ALCHEMY_RPC_URL
+        sync: false

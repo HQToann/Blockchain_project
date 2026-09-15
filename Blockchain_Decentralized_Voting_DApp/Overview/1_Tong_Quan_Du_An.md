@@ -30,20 +30,19 @@ Hệ thống này mã hóa **mỗi lá phiếu thành một giao dịch (Transac
 └──────────────────────┬─────────────────────────────────┘
                        │ REST API (JSON) + WebSocket (Real-time)
 ┌──────────────────────▼─────────────────────────────────┐
-│  TẦNG 2: BACKEND (Django 5 + Channels)                  │
-│  API JSON + SIWE Auth + Đẩy WebSocket Real-time        │
+│  TẦNG 2: BACKEND (Django 5 + Channels - Render Web)     │
+│  API JSON + SIWE Auth + Phân phối WebSocket (Redis)     │
 └──────────────────────┬─────────────────────────────────┘
        │ ORM                       │ requests lib
 ┌──────▼────┐        ┌───────▼─────────────────────────┐
 │  TẦNG 3a:   │        │  TẦNG 3b: IPFS (Pinata)             │
-│  PostgreSQL │        │  Lưu ảnh ứng viên phi tập trung       │
-│  (Off-chain)│        └───────────────────────────────┘
-└────────────┘
-        ▲
-        │ Django ORM (ghi số phiếu)
-┌───────┴─────────────────────────────────────────────────┐
-│  TẦNG 4: INDEXER (Python + Web3.py)                     │
-│  Script chạy ngầm 24/7 — Lắng nghe Event VoteCast      │
+│  Supabase   │        │  Lưu ảnh ứng viên phi tập trung       │
+│  (PostgreSQL)│       └───────────────────────────────┘
+└──────┬─────┘
+       │ ORM / Webhook API (/api/internal/notify_vote)
+┌──────┴──────────────────────────────────────────────────┐
+│  TẦNG 4: BACKGROUND WORKER (Indexer - Web3.py)          │
+│  Script chạy ngầm hoàn toàn độc lập trên Render         │
 └───────────────────────┬─────────────────────────────────┘
                         │ Đọc Event logs
 ┌───────────────────────▼─────────────────────────────────┐

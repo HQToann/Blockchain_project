@@ -36,15 +36,23 @@ INSTALLED_APPS = [
 # 3. Chuyển sang ASGI
 ASGI_APPLICATION = 'core.asgi.application'
 
-# 4. Cấu hình Channel Layer: Sử dụng Redis (BẮT BUỘC ĐỂ HOẠT ĐỘNG XUYÊN PROCESS)
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
-        },
+# 4. Cấu hình Channel Layer: Tự động dùng Redis nếu có REDIS_URL (Trên Render)
+REDIS_URL = os.environ.get('REDIS_URL')
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+            },
+        }
     }
-}
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        }
+    }
 ```
 
 Mở `core/asgi.py`, sửa toàn bộ thành:
@@ -127,32 +135,46 @@ websocket_urlpatterns = [
 
 ---
 
-## BƯỚC 4: Kết nối Indexer với Channels
-
-Mở lại file `indexer/indexer.py` (của Ngày 7), ở chỗ **cộng phiếu thành công**, ta sẽ "Hét" lên cho Channels biết để nó phát xuống Frontend:
+Mở file `election/views.py` và bổ sung API Webhook nội bộ để nhận tin từ Indexer, sau đó phát xuống Frontend:
 
 ```python
-import os
-import sys
-import django
-from channels.layers import get_channel_layer
+import json
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
-# ... [Các code setup Django như cũ] ...
-
-# Ở chỗ sau khi update vote_count thành công:
-channel_layer = get_channel_layer()
-async_to_sync(channel_layer.group_send)(
-    f'election_{election.id}',
-    {
-        'type': 'send_vote_update',
-        'message': {
-            'candidate_id': candidate_id,
-            'tx_hash': tx_hash
-        }
-    }
-)
+@csrf_exempt
+def internal_notify_vote(request):
+    """
+    Webhook nội bộ để Indexer gọi vào mỗi khi có vote mới.
+    Giải quyết triệt để lỗi "Timeout reading from Redis" và lỗi khác process trên Render.
+    """
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            election_id = data.get("election_id")
+            if not election_id:
+                return JsonResponse({"status": "error", "message": "Missing election_id"}, status=400)
+            
+            # Khởi tạo lại Redis pool an toàn trong luồng HTTP của ASGI
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"election_{election_id}",
+                {
+                    "type": "send_vote_update",
+                    "message": "Update"
+                }
+            )
+            
+            return JsonResponse({"status": "ok"})
+        except Exception as e:
+            return JsonResponse({"status": "error", "message": str(e)}, status=500)
+            
+    return JsonResponse({"status": "error", "message": "Method not allowed"}, status=405)
 ```
+
+*(Lưu ý: Indexer ở Ngày 7 sẽ gọi HTTP POST vào endpoint này thay vì tự gọi `channel_layer.group_send`)*
 
 ---
 🎉 **XONG NGÀY 8!**

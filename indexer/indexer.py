@@ -4,8 +4,7 @@ import time
 import django
 from web3 import Web3
 from django.db.models import F  # Import F để cộng phiếu an toàn (tránh race condition)
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
+import requests
 
 # Cấu hình để script chạy độc lập có thể truy cập Database của Django
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -13,7 +12,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings")
 django.setup()
 
 from django.db import transaction
-from election.models import Election, Candidate, VoteRecord
+from election.models import Election, Candidate, VoteRecord, SystemLog
 
 # Tải cấu hình từ .env
 from dotenv import load_dotenv
@@ -51,8 +50,12 @@ def update_last_block(block_num):
         f.write(str(block_num))
 
 def process_events():
-    from_block = get_last_processed_block()
-    current_block = w3.eth.block_number
+    try:
+        from_block = get_last_processed_block()
+        current_block = w3.eth.block_number
+    except Exception as e:
+        print("Lỗi kết nối RPC (Alchemy):", e)
+        return
     
     if from_block > current_block:
         return
@@ -79,6 +82,7 @@ def process_events():
                 defaults={'name': name, 'status': 'pending', 'is_private': is_private}
             )
             print(f"✅ Đã tạo cuộc bầu cử mới: {name} ở địa chỉ {contract_addr}")
+            SystemLog.objects.create(level='SUCCESS', module='BLOCKCHAIN', message=f'Event ElectionCreated: Hòm phiếu {name} được tạo tại {contract_addr[:10]}...')
     except Exception as e:
         print("Lỗi quét Factory:", e)
         has_error = True
@@ -91,8 +95,8 @@ def process_events():
             vote_events = poll_contract.events.VoteCast.get_logs(from_block=from_block, to_block=current_block)
             
             for evt in vote_events:
-                tx_hash = evt.transaction_hash.hex()
-                block_num = evt.block_number
+                tx_hash = evt.transactionHash.hex()
+                block_num = evt.blockNumber
                 candidate_id = evt.args.candidateId
                 
                 # --- PHẦN BẢO MẬT: TRANSACTION ATOMIC ---
@@ -127,19 +131,17 @@ def process_events():
                         ).update(vote_count=F('vote_count') + 1)
                         
                         print(f"🔥 Cập nhật phiếu thành công cho Tx: {tx_hash}")
+                        SystemLog.objects.create(level='SUCCESS', module='BLOCKCHAIN', message=f'Event VoteCast: Có phiếu mới cho Ứng viên ID {candidate_id}. Tx: {tx_hash[:10]}...')
                         
-                        # --- Bắn tín hiệu WebSocket (Real-time) cho Frontend ---
-                        channel_layer = get_channel_layer()
-                        async_to_sync(channel_layer.group_send)(
-                            f'election_{election.id}',
-                            {
-                                'type': 'send_vote_update',
-                                'message': {
-                                    'candidate_id': candidate_id,
-                                    'tx_hash': tx_hash
-                                }
-                            }
-                        )
+                        # --- Bắn tín hiệu WebSocket (Real-time) cho Frontend qua API ---
+                        try:
+                            requests.post(f"http://127.0.0.1:8000/api/internal/notify_vote/", json={
+                                "election_id": election.id,
+                                "candidate_id": candidate_id,
+                                "tx_hash": tx_hash
+                            }, timeout=2)
+                        except Exception as req_err:
+                            print(f"Lỗi gọi API Webhook: {req_err}")
                 except Exception as db_err:
                     print(f"Lỗi Database Transaction: {db_err}")
                     has_error = True

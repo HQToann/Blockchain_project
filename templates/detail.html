@@ -3,25 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <title>Chi Tiết Bầu Cử</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    
+    <!-- Toastify CSS -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    
     <!-- Thư viện Ethers.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
     <!-- Thư viện Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Toastify JS -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 </head>
 <body>
-    <h1 id="electionName">Đang tải...</h1>
-    
-    <button id="btnConnect" onclick="connectWallet()">Kết Nối MetaMask</button>
-    <p id="walletAddress"></p>
+    <div class="container">
+        <a href="/" class="btn" style="background: var(--bg-color); color: var(--text-primary); border: 1px solid var(--border-color); box-shadow: none; margin-bottom: 20px;">⬅ Quay lại Trang Chủ</a>
+        
+        <div class="header-flex" style="margin-bottom: 20px;">
+            <div>
+                <h1 id="electionName" style="margin-bottom: 10px;">Đang tải...</h1>
+                <div id="electionStatusBadge"></div>
+            </div>
+            <div style="text-align: right;">
+                <button id="btnConnect" onclick="connectWallet()" class="btn">🦊 Kết Nối MetaMask</button>
+                <p id="walletAddress" style="color: var(--success-color); font-weight: bold; margin-top: 10px;"></p>
+            </div>
+        </div>
+        
+        <hr>
 
-    <!-- Biểu đồ -->
-    <div style="width: 400px; height: 400px;">
-        <canvas id="voteChart"></canvas>
+        <div style="display: flex; flex-wrap: wrap; gap: 30px;">
+            <!-- Cột Biểu đồ -->
+            <div class="card" style="flex: 1; min-width: 300px; max-width: 400px; margin: 0 auto;">
+                <h3 style="text-align: center; margin-bottom: 20px;">Thống Kê Phiếu Bầu</h3>
+                <canvas id="voteChart"></canvas>
+            </div>
+
+            <!-- Cột Ứng Viên -->
+            <div style="flex: 2; min-width: 300px;">
+                <h2>👥 Danh Sách Ứng Viên</h2>
+                <div id="candidateList" class="candidate-grid" style="margin-top: 15px;"></div>
+            </div>
+        </div>
+
     </div>
-
-    <!-- Danh sách ứng viên để Vote -->
-    <div id="candidateList"></div>
-
     <script src="/static/js/app.js"></script>
 </body>
 </html>

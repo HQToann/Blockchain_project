@@ -3,13 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <title>Hệ Thống Bầu Cử Phân Tán</title>
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <h1>Hệ Thống Bầu Cử Blockchain</h1>
-    <a href="/dashboard/">🔑 Vào Trang Quản Trị (Admin)</a>
-    <hr>
+    <div class="container">
+        <div class="header-flex">
+            <h1>Hệ Thống Bầu Cử Blockchain</h1>
+            <a href="/dashboard/" class="btn btn-admin">🔑 Trang Quản Trị</a>
+        </div>
 
-    <h2>Danh Sách Cuộc Bầu Cử</h2>
+        <h2>Danh Sách Cuộc Bầu Cử</h2>
     <div id="electionList"><p>Đang tải...</p></div>
 
     <script>
@@ -19,20 +22,35 @@
         const container = document.getElementById('electionList');
         
         if (!data.elections || data.elections.length === 0) {
-            container.innerHTML = '<p>Chưa có cuộc bầu cử nào.</p>';
+            container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Chưa có cuộc bầu cử nào được tạo.</p>';
             return;
         }
         
-        container.innerHTML = data.elections.map(e => `
-            <div style="border:1px solid #ccc; margin:10px; padding:15px;">
+        container.className = "election-grid";
+        container.innerHTML = data.elections.map(e => {
+            let statusBadge = e.status;
+            let statusText = e.status;
+            if (e.status === 'pending') statusText = 'Sắp diễn ra';
+            if (e.status === 'active') statusText = 'Đang diễn ra';
+            if (e.status === 'closed') statusText = 'Đã kết thúc';
+
+            return `
+            <div class="election-card">
                 <h3>${e.name}</h3>
-                <p>Trạng thái: <strong>${e.status}</strong> | ${e.is_private ? '🔒 Bầu kín' : '🌍 Công khai'}</p>
-                <a href="/election/${e.id}/">🗳️ Tham gia bầu cử này</a>
+                <div style="margin: 15px 0;">
+                    <span class="badge ${statusBadge}">${statusText}</span>
+                    <span class="badge ${e.is_private ? 'private' : 'public'}">${e.is_private ? '🔒 Bầu kín' : '🌍 Công khai'}</span>
+                </div>
+                <p>Tổng số phiếu: <strong style="color: var(--success-color);">${e.total_votes}</strong></p>
+                <br>
+                <a href="/election/${e.id}/" class="btn" style="width: 100%; box-sizing: border-box; text-align: center;">🗳️ Vào Phòng Bỏ Phiếu</a>
             </div>
-        `).join('');
+            `;
+        }).join('');
     }
     
     window.onload = loadElections;
     </script>
+    </div>
 </body>
 </html>

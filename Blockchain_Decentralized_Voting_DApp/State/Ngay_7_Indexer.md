@@ -45,6 +45,7 @@ Mở file `indexer/indexer.py` và dán mã sau:
 import os
 import sys
 import time
+import requests
 import django
 from web3 import Web3
 from django.db.models import F  # Import F để cộng phiếu an toàn (tránh race condition)
@@ -153,6 +154,17 @@ def process_events():
                         ).update(vote_count=F('vote_count') + 1)
                         
                         print(f"🔥 Cập nhật phiếu thành công cho Tx: {tx_hash}")
+                        
+                        # BÁO CÁO QUA WEBHOOK CHO DJANGO (Giải quyết lỗi Cross-Process trên Production)
+                        try:
+                            # Django Server chạy ở cổng 8000
+                            requests.post(
+                                "http://127.0.0.1:8000/api/internal/notify_vote/",
+                                json={"election_id": election.id},
+                                timeout=2
+                            )
+                        except Exception as req_err:
+                            print("Lỗi khi gọi Webhook WebSocket:", req_err)
                 except Exception as db_err:
                     print(f"Lỗi Database Transaction: {db_err}")
                     has_error = True

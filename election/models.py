@@ -28,3 +28,28 @@ class WhitelistVoter(models.Model):
     
     class Meta:
         unique_together = ('election', 'voter_address')
+
+class SystemLog(models.Model):
+    LEVEL_CHOICES = [
+        ('INFO', 'Thông tin'),
+        ('SUCCESS', 'Thành công'),
+        ('WARNING', 'Cảnh báo'),
+        ('ERROR', 'Lỗi'),
+    ]
+    MODULE_CHOICES = [
+        ('SYSTEM', 'Hệ thống'),
+        ('BLOCKCHAIN', 'Blockchain'),
+        ('IPFS', 'IPFS Pinata'),
+        ('ADMIN', 'Quản trị viên'),
+    ]
+    
+    timestamp = models.DateTimeField(auto_now_add=True)
+    level = models.CharField(max_length=10, choices=LEVEL_CHOICES, default='INFO')
+    module = models.CharField(max_length=20, choices=MODULE_CHOICES, default='SYSTEM')
+    message = models.TextField()
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"[{self.get_level_display()}] {self.module}: {self.message[:50]}"
