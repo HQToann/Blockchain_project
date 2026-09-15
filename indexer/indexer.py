@@ -11,7 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings")
 django.setup()
 
-from django.db import transaction
+from django.db import transaction, close_old_connections
 from election.models import Election, Candidate, VoteRecord, SystemLog
 
 # Tải cấu hình từ .env
@@ -158,5 +158,8 @@ def process_events():
 if __name__ == "__main__":
     print("🚀 Khởi động Indexer...")
     while True:
+        # Đóng các kết nối CSDL đã cũ để tránh lỗi "server closed the connection unexpectedly" trên PostgreSQL
+        close_old_connections()
+        
         process_events()
         time.sleep(5) # Nghỉ 5 giây tránh dính rate-limit của Alchemy
