@@ -18,6 +18,8 @@ django-jazzmin = "*"
 dj-database-url = "*"
 whitenoise = "*"
 gunicorn = "*"
+django-rq = "*"
+redis = "*"
 
 [dev-packages]
 

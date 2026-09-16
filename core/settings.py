@@ -48,6 +48,9 @@ INSTALLED_APPS = [
 
     # Websocket
     'channels',
+    
+    # Background Tasks
+    'django_rq',
 ]
 
 MIDDLEWARE = [
@@ -129,6 +132,14 @@ else:
             "BACKEND": "channels.layers.InMemoryChannelLayer",
         }
     }
+
+# Cấu hình django-rq
+RQ_QUEUES = {
+    'default': {
+        'URL': os.environ.get('REDIS_URL', 'redis://localhost:6379/0'),
+        'DEFAULT_TIMEOUT': 500,
+    }
+}
 
 
 # Password validation

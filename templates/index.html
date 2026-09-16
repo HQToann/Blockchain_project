@@ -9,10 +9,16 @@
     <div class="container">
         <div class="header-flex">
             <h1>Hệ Thống Bầu Cử Blockchain</h1>
-            <a href="/admin/" class="btn btn-admin">🔑 Trang Quản Trị</a>
+            <div>
+                <a href="/verify/" class="btn" style="background: rgba(88, 166, 255, 0.1); border: 1px solid #58a6ff; color: #58a6ff; margin-right: 10px;">🔍 Xác Minh Phiếu</a>
+                <a href="/admin/" class="btn btn-admin">🔑 Trang Quản Trị</a>
+            </div>
         </div>
 
         <h2>Danh Sách Cuộc Bầu Cử</h2>
+        <div id="syncWarning" style="display: none; background: #fff3cd; color: #856404; padding: 10px; border-radius: 6px; border-left: 4px solid #ffeeba; margin-bottom: 20px; font-size: 0.9em;">
+            ⚠️ <strong>Cảnh báo:</strong> Trình đồng bộ hoá (Indexer) có vẻ đang mất kết nối hoặc phản hồi chậm. Dữ liệu hiển thị có thể chưa phải là mới nhất.
+        </div>
     <div id="electionList"><p>Đang tải...</p></div>
 
     <script>
@@ -20,6 +26,13 @@
         const res = await fetch('/api/elections/');
         const data = await res.json();
         const container = document.getElementById('electionList');
+        const syncWarning = document.getElementById('syncWarning');
+        
+        if (data.is_lagging) {
+            syncWarning.style.display = 'block';
+        } else {
+            syncWarning.style.display = 'none';
+        }
         
         if (!data.elections || data.elections.length === 0) {
             container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Chưa có cuộc bầu cử nào được tạo.</p>';
@@ -41,7 +54,7 @@
                     <span class="badge ${statusBadge}">${statusText}</span>
                     <span class="badge ${e.is_private ? 'private' : 'public'}">${e.is_private ? '🔒 Bầu kín' : '🌍 Công khai'}</span>
                 </div>
-                <p>Tổng số phiếu: <strong style="color: var(--success-color);">${e.total_votes}</strong></p>
+                <p>Tổng số phiếu: <strong id="vote_count_${e.id}" style="color: var(--success-color); transition: all 0.3s ease;">${e.total_votes}</strong></p>
                 <br>
                 <a href="/election/${e.id}/" class="btn" style="width: 100%; box-sizing: border-box; text-align: center;">🗳️ Vào Phòng Bỏ Phiếu</a>
             </div>
@@ -49,7 +62,40 @@
         }).join('');
     }
     
-    window.onload = loadElections;
+    
+    function setupWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws/election/all/`);
+        
+        ws.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            if (data.type === 'NEW_VOTE') {
+                const electionId = data.data.election_id;
+                const voteCountSpan = document.getElementById(`vote_count_${electionId}`);
+                if (voteCountSpan) {
+                    let current = parseInt(voteCountSpan.innerText) || 0;
+                    voteCountSpan.innerText = current + 1;
+                    
+                    // Hiệu ứng chớp sáng khi có phiếu mới
+                    voteCountSpan.style.color = '#fff';
+                    voteCountSpan.style.textShadow = '0 0 15px var(--success-color)';
+                    setTimeout(() => {
+                        voteCountSpan.style.color = 'var(--success-color)';
+                        voteCountSpan.style.textShadow = 'none';
+                    }, 1000);
+                }
+            }
+        };
+        
+        ws.onclose = function() {
+            setTimeout(setupWebSocket, 3000); // Tự kết nối lại sau 3s nếu mất mạng
+        };
+    }
+    
+    window.onload = () => {
+        loadElections();
+        setupWebSocket();
+    };
     </script>
     </div>
 </body>

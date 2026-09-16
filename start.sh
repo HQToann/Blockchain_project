@@ -1,4 +1,7 @@
 #!/bin/bash
+# Chạy Background Task Worker ngầm (Redis RQ)
+python manage.py rqworker default &
+
 # Chạy Indexer ngầm
 python indexer/indexer.py &
 

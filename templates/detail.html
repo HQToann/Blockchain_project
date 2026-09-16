@@ -30,6 +30,18 @@
             </div>
         </div>
         
+        {% if request.user.is_staff %}
+        <div id="adminWhitelistSection" style="display: none; background: rgba(88, 166, 255, 0.1); border: 1px solid #58a6ff; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+            <h3 style="margin-bottom: 10px; color: #58a6ff;">🛡️ Quản lý Whitelist (Admin)</h3>
+            <p style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 15px;">Thêm địa chỉ ví vào danh sách cử tri (chỉ áp dụng cho Hòm phiếu Private).</p>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <input type="text" id="whitelistAddress" placeholder="0x..." style="flex: 1; min-width: 250px; padding: 12px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-primary);">
+                <button onclick="addWhitelist()" id="btnWhitelist" class="btn" style="background: #58a6ff;">➕ Thêm Cử Tri</button>
+            </div>
+            <p id="whitelistStatus" style="margin-top: 10px; font-size: 0.9em;"></p>
+        </div>
+        {% endif %}
+        
         <hr>
 
         <div style="display: flex; flex-wrap: wrap; gap: 30px;">

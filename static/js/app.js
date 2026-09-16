@@ -1,5 +1,5 @@
 // --- CONFIGURATION ---
-const RPC_URL = "https://eth-sepolia.g.alchemy.com/v2/L_p_5WfT_l6U2640L140Hn3f0qV9xM4p"; // Cấu hình RPC (Tùy chọn cho frontend)
+
 const EXPECTED_CHAIN_ID = 11155111; // Sepolia Testnet
 const ELECTION_ID = parseInt(window.location.pathname.split('/').filter(Boolean)[1]) || 1;
 
@@ -21,6 +21,17 @@ let userIsWhitelisted = false;
 
 // Khởi tạo Chart.js
 let myChart = null;
+
+// Hàm chống XSS (Cross-Site Scripting)
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 // --- UTILS: TOAST NOTIFICATION ---
 function showToast(message, type="info") {
@@ -68,6 +79,59 @@ async function connectWallet() {
     }
 
     renderCandidateButtons(); // Cập nhật lại nút vote
+}
+
+// --- ADMIN WHITELIST ---
+async function addWhitelist() {
+    const addressInput = document.getElementById("whitelistAddress").value.trim();
+    const btn = document.getElementById("btnWhitelist");
+    const status = document.getElementById("whitelistStatus");
+    
+    if (!addressInput) {
+        showToast("Vui lòng nhập địa chỉ ví!", "warning");
+        return;
+    }
+    
+    // Kiểm tra định dạng ví Ethereum
+    if (!/^0x[a-fA-F0-9]{40}$/.test(addressInput)) {
+        showToast("Địa chỉ ví không hợp lệ!", "error");
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span> Đang xử lý...`;
+    status.innerText = "Đang gửi yêu cầu...";
+    status.style.color = "var(--text-secondary)";
+    
+    try {
+        const response = await fetch(`/api/elections/${ELECTION_ID}/whitelist/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ voter_address: addressInput })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showToast("Thêm cử tri thành công! Giao dịch đang chạy ngầm.", "success");
+            status.innerText = "✅ " + data.message;
+            status.style.color = "var(--success-color)";
+            document.getElementById("whitelistAddress").value = "";
+        } else {
+            showToast(data.error || "Có lỗi xảy ra", "error");
+            status.innerText = "❌ Lỗi: " + (data.error || "Không xác định");
+            status.style.color = "var(--error-color)";
+        }
+    } catch (err) {
+        showToast("Lỗi kết nối máy chủ", "error");
+        status.innerText = "❌ Lỗi mạng!";
+        status.style.color = "var(--error-color)";
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `➕ Thêm Cử Tri`;
+    }
 }
 
 // 2. XỬ LÝ BỎ PHIẾU
@@ -132,6 +196,12 @@ async function fetchInitialData() {
         <span class="badge ${electionData.election.is_private ? 'private' : 'public'}">${electionData.election.is_private ? '🔒 Bầu kín' : '🌍 Công khai'}</span>
     `;
     
+    // Hiện khung thêm Whitelist nếu là hòm phiếu Private (Và DOM có tồn tại do được load bởi user admin)
+    const adminSection = document.getElementById("adminWhitelistSection");
+    if (adminSection && electionData.election.is_private) {
+        adminSection.style.display = "block";
+    }
+
     renderChart();
     renderCandidateDOM(); // Vẽ khung HTML cho ứng viên
     renderCandidateButtons(); // Cập nhật trạng thái nút ban đầu
@@ -161,10 +231,12 @@ function renderCandidateDOM() {
     const listDiv = document.getElementById("candidateList");
     listDiv.innerHTML = "";
     electionData.candidates.forEach(c => {
+        const safeName = escapeHTML(c.name);
+        const safeImg = escapeHTML(c.image_url);
         listDiv.innerHTML += `
             <div class="candidate-card">
-                <img src="${c.image_url}" alt="${c.name}"/>
-                <h3>${c.name}</h3>
+                <img src="${safeImg}" alt="${safeName}"/>
+                <h3>${safeName}</h3>
                 <div class="vote-stats" id="voteCount_${c.id}">${c.vote_count} phiếu</div>
                 <div class="percentage-bar">
                     <div class="percentage-fill" id="voteFill_${c.id}" style="width: ${c.percentage}%"></div>
@@ -188,7 +260,8 @@ function renderCandidateButtons() {
 
         let btnHtml = "";
         let btnDisabled = false;
-        let btnText = `🗳️ Bầu Cho ${c.name}`;
+        const safeName = escapeHTML(c.name);
+        let btnText = `🗳️ Bầu Cho ${safeName}`;
 
         // Các lớp kiểm tra điều kiện để Khóa nút
         if (status !== 'active') {

@@ -12,7 +12,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings")
 django.setup()
 
 from django.db import transaction, close_old_connections
-from election.models import Election, Candidate, VoteRecord, SystemLog
+from election.models import Election, Candidate, VoteRecord, SystemLog, IndexerState, WhitelistVoter
 
 # Tải cấu hình từ .env
 from dotenv import load_dotenv
@@ -34,22 +34,107 @@ except FileNotFoundError:
     sys.exit(1)
 
 # Địa chỉ Factory Contract (tự động trích xuất từ file deployed_addresses.json)
-FACTORY_ADDRESS = "0x44F8Db431EA5049D60547777Af54a0D7E46D12DE"
+from election.utils import get_factory_address
+FACTORY_ADDRESS = get_factory_address()
 
 factory_contract = w3.eth.contract(address=FACTORY_ADDRESS, abi=FACTORY_ABI)
 
 def get_last_processed_block():
     try:
-        with open("indexer/last_block.txt", "r") as f:
-            return int(f.read().strip())
-    except:
+        state, created = IndexerState.objects.get_or_create(key='main')
+        if created or state.last_block == 0:
+            # Nếu chưa có trạng thái, lấy từ biến môi trường START_BLOCK (nếu có), không thì lấy current block
+            start_block = os.environ.get('START_BLOCK')
+            if start_block and start_block.isdigit():
+                return int(start_block)
+            return w3.eth.block_number
+        return state.last_block
+    except Exception as e:
+        print(f"Lỗi lấy trạng thái Indexer từ DB: {e}")
         return w3.eth.block_number
 
 def update_last_block(block_num):
-    with open("indexer/last_block.txt", "w") as f:
-        f.write(str(block_num))
+    try:
+        IndexerState.objects.filter(key='main').update(last_block=block_num)
+    except Exception as e:
+        print(f"Lỗi lưu trạng thái Indexer vào DB: {e}")
+
+from web3.exceptions import TransactionNotFound
+
+def check_broadcasted_transactions():
+    # 1. Election
+    for election in Election.objects.filter(tx_status='broadcasted'):
+        try:
+            receipt = w3.eth.get_transaction_receipt(election.tx_hash)
+            if receipt.status == 1:
+                election.tx_status = 'confirmed'
+                
+                # Cập nhật địa chỉ contract nếu là tác vụ tạo hòm phiếu
+                if not election.contract_addr:
+                    logs = factory_contract.events.ElectionCreated().process_receipt(receipt)
+                    if logs:
+                        election.contract_addr = logs[0]['args']['electionAddress']
+                        SystemLog.objects.create(level='SUCCESS', module='BLOCKCHAIN', message=f'Tạo hòm phiếu {election.name} thành công. Contract: {election.contract_addr}')
+                # Nếu là tác vụ đổi trạng thái
+                elif election.tx_error and election.tx_error.startswith('pending_status:'):
+                    new_status = election.tx_error.split(':')[1]
+                    election.status = new_status
+                    election.tx_error = ''
+                    SystemLog.objects.create(level='SUCCESS', module='BLOCKCHAIN', message=f'Đổi trạng thái hòm phiếu {election.name} thành {new_status}.')
+                    from election.tasks import broadcast_update
+                    broadcast_update(election.id)
+            else:
+                election.tx_status = 'failed'
+                election.tx_error = 'Transaction Reverted on-chain'
+                SystemLog.objects.create(level='ERROR', module='BLOCKCHAIN', message=f'Giao dịch Election {election.name} bị Reverted!')
+            election.save()
+        except TransactionNotFound:
+            pass # Vẫn đang pending
+        except Exception as e:
+            print(f"Lỗi kiểm tra receipt Election: {e}")
+
+    # 2. Candidate
+    for candidate in Candidate.objects.filter(tx_status='broadcasted'):
+        try:
+            receipt = w3.eth.get_transaction_receipt(candidate.tx_hash)
+            if receipt.status == 1:
+                candidate.tx_status = 'confirmed'
+                election_contract = w3.eth.contract(address=candidate.election.contract_addr, abi=ELECTION_ABI)
+                logs = election_contract.events.CandidateAdded().process_receipt(receipt)
+                if logs:
+                    candidate.candidate_id = logs[0]['args']['candidateId']
+                SystemLog.objects.create(level='SUCCESS', module='BLOCKCHAIN', message=f'Thêm ứng viên {candidate.name} thành công.')
+                from election.tasks import broadcast_update
+                broadcast_update(candidate.election.id)
+            else:
+                candidate.tx_status = 'failed'
+                candidate.tx_error = 'Transaction Reverted on-chain'
+                SystemLog.objects.create(level='ERROR', module='BLOCKCHAIN', message=f'Giao dịch thêm ứng viên {candidate.name} bị Reverted!')
+            candidate.save()
+        except TransactionNotFound:
+            pass
+        except Exception as e:
+            print(f"Lỗi kiểm tra receipt Candidate: {e}")
+
+    # 3. WhitelistVoter
+    for wl in WhitelistVoter.objects.filter(tx_status='broadcasted'):
+        try:
+            receipt = w3.eth.get_transaction_receipt(wl.tx_hash)
+            if receipt.status == 1:
+                wl.tx_status = 'confirmed'
+                SystemLog.objects.create(level='SUCCESS', module='BLOCKCHAIN', message=f'Thêm whitelist {wl.voter_address} thành công.')
+            else:
+                wl.tx_status = 'failed'
+                wl.tx_error = 'Transaction Reverted on-chain'
+                SystemLog.objects.create(level='ERROR', module='BLOCKCHAIN', message=f'Giao dịch thêm whitelist {wl.voter_address} bị Reverted!')
+            wl.save()
+        except TransactionNotFound:
+            pass
+        except Exception as e:
+            print(f"Lỗi kiểm tra receipt Whitelist: {e}")
 
 def process_events():
+    check_broadcasted_transactions()
     try:
         from_block = get_last_processed_block()
         current_block = w3.eth.block_number
@@ -87,8 +172,8 @@ def process_events():
         print("Lỗi quét Factory:", e)
         has_error = True
 
-    # 2. Lắng nghe Event: Bỏ phiếu (VoteCast) trên tất cả hòm phiếu
-    elections = Election.objects.all()
+    # 2. Lắng nghe Event: Bỏ phiếu (VoteCast) trên tất cả hòm phiếu đang hoạt động
+    elections = Election.objects.exclude(status='closed').exclude(contract_addr__isnull=True)
     for election in elections:
         poll_contract = w3.eth.contract(address=election.contract_addr, abi=ELECTION_ABI)
         try:
@@ -136,11 +221,12 @@ def process_events():
                         # --- Bắn tín hiệu WebSocket (Real-time) cho Frontend qua API ---
                         try:
                             server_port = os.environ.get('PORT', 8000)
+                            secret = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-default')
                             requests.post(f"http://127.0.0.1:{server_port}/api/internal/notify_vote/", json={
                                 "election_id": election.id,
                                 "candidate_id": candidate_id,
                                 "tx_hash": tx_hash
-                            }, timeout=2)
+                            }, headers={'X-Internal-Secret': secret}, timeout=2)
                         except Exception as req_err:
                             print(f"Lỗi gọi API Webhook: {req_err}")
                 except Exception as db_err:

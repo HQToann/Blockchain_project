@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Xác Minh Phiếu Bầu</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .result-box {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+            word-break: break-all;
+        }
+        .status-confirmed { background: rgba(63, 185, 80, 0.1); border: 1px solid #3fb950; }
+        .status-pending { background: rgba(227, 179, 65, 0.1); border: 1px solid #e3b341; }
+        .status-failed { background: rgba(248, 81, 73, 0.1); border: 1px solid #f85149; }
+    </style>
+</head>
+<body>
+    <div class="container" style="max-width: 600px; margin: 50px auto;">
+        <a href="/" class="btn" style="background: var(--bg-color); color: var(--text-primary); border: 1px solid var(--border-color); box-shadow: none; margin-bottom: 20px;">⬅ Quay lại Trang Chủ</a>
+        
+        <h1 style="text-align: center; margin-bottom: 30px;">🔍 Xác Minh Phiếu Bầu Trên Chuỗi</h1>
+        
+        <div class="card">
+            <p style="color: var(--text-secondary); margin-bottom: 20px; text-align: center;">Nhập mã giao dịch (TxHash) của bạn để kiểm tra trạng thái bỏ phiếu trên mạng lưới Blockchain.</p>
+            
+            <input type="text" id="txHashInput" placeholder="VD: 0x123abc..." style="width: 100%; box-sizing: border-box; padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-primary); font-size: 16px; margin-bottom: 15px;">
+            <button onclick="verifyTx()" id="btnVerify" class="btn" style="width: 100%; font-size: 16px;">Kiểm Tra Ngay</button>
+            
+            <div id="resultBox" class="result-box">
+                <h3 id="resultTitle" style="margin-bottom: 15px;"></h3>
+                <p id="resultMessage" style="margin-bottom: 15px;"></p>
+                <div id="resultDetails" style="display: none; background: var(--bg-color); padding: 15px; border-radius: 6px; font-size: 0.9em;">
+                    <p><strong>Hòm phiếu:</strong> <span id="rElection"></span></p>
+                    <p><strong>Địa chỉ ví (Cử tri):</strong> <span id="rVoter"></span></p>
+                    <p><strong>Khối (Block):</strong> <span id="rBlock"></span></p>
+                    <p><strong>Thời gian ghi nhận:</strong> <span id="rTime"></span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    async function verifyTx() {
+        const txInput = document.getElementById('txHashInput').value.trim();
+        const btn = document.getElementById('btnVerify');
+        const resultBox = document.getElementById('resultBox');
+        
+        if (!txInput) {
+            alert("Vui lòng nhập mã giao dịch!");
+            return;
+        }
+        
+        btn.disabled = true;
+        btn.innerHTML = 'Đang kiểm tra...';
+        
+        try {
+            const res = await fetch(`/api/verify/?tx=${txInput}`);
+            const data = await res.json();
+            
+            resultBox.style.display = 'block';
+            resultBox.className = 'result-box'; // reset
+            document.getElementById('resultDetails').style.display = 'none';
+            
+            if (data.status === 'confirmed') {
+                resultBox.classList.add('status-confirmed');
+                document.getElementById('resultTitle').innerHTML = '✅ Hợp lệ & Đã xác nhận';
+                document.getElementById('resultTitle').style.color = '#3fb950';
+                document.getElementById('resultMessage').innerText = data.message;
+                
+                // Show details
+                document.getElementById('resultDetails').style.display = 'block';
+                document.getElementById('rElection').innerText = data.data.election;
+                document.getElementById('rVoter').innerText = data.data.voter_address;
+                document.getElementById('rBlock').innerText = data.data.block_number;
+                document.getElementById('rTime').innerText = data.data.time;
+            } else if (data.status === 'indexing' || data.status === 'pending') {
+                resultBox.classList.add('status-pending');
+                document.getElementById('resultTitle').innerHTML = '⏳ Đang xử lý';
+                document.getElementById('resultTitle').style.color = '#e3b341';
+                document.getElementById('resultMessage').innerText = data.message;
+            } else {
+                resultBox.classList.add('status-failed');
+                document.getElementById('resultTitle').innerHTML = '❌ Thất bại hoặc Không tìm thấy';
+                document.getElementById('resultTitle').style.color = '#f85149';
+                document.getElementById('resultMessage').innerText = data.message || data.error;
+            }
+        } catch (e) {
+            alert("Lỗi kết nối máy chủ");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = 'Kiểm Tra Ngay';
+        }
+    }
+    </script>
+</body>
+</html>

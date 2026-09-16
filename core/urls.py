@@ -9,6 +9,8 @@ urlpatterns = [
     # Trang HTML
     path('', TemplateView.as_view(template_name='index.html')),
     path('election/<int:election_id>/', TemplateView.as_view(template_name='detail.html')),
+    path('verify/', TemplateView.as_view(template_name='verify.html')),
+    
     # System Logs
     path('logs/', views.system_logs),
     path('api/logs/', views.get_latest_logs),
@@ -17,10 +19,10 @@ urlpatterns = [
     path('api/auth/nonce/', views.get_nonce),
     path('api/auth/verify/', views.verify_signature),
 
-    # IPFS
-    path('api/upload/', views.upload_candidate_image),
+    # API
     path('api/elections/', views.get_elections),
     path('api/elections/<int:election_id>/', views.get_election_detail),
-    path('api/elections/<int:election_id>/candidates/', views.create_candidate),
+    path('api/elections/<int:election_id>/whitelist/', views.add_whitelist_api),
+    path('api/verify/', views.verify_vote_api),
     path('api/internal/notify_vote/', views.internal_notify_vote),
 ]
