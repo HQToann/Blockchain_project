@@ -1,14 +1,23 @@
-# Node.js & Hardhat
+# ==========================================
+# NODE.JS & HARDHAT
+# ==========================================
 node_modules/
 artifacts/
 cache/
-ignition/deployments/chain-31337/
 
-# Environment Variables
+# Hardhat Ignition deployments (chỉ ignore local chain)
+blockchain/ignition/deployments/chain-31337/
+
+# ==========================================
+# BIẾN MÔI TRƯỜNG
+# ==========================================
 .env
 .env.*
+!.env.example
 
-# Python / Django
+# ==========================================
+# PYTHON / DJANGO
+# ==========================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -16,6 +25,24 @@ __pycache__/
 db.sqlite3
 .venv/
 venv/
+staticfiles/
 
-# RoatMap
-Blockchain_Decentralized_Voting_DApp/
+# ==========================================
+# TÀI LIỆU NỘI BỘ (Không cần commit)
+# ==========================================
+# Blockchain_Decentralized_Voting_DApp/   ← GIỮ LẠI (tài liệu hướng dẫn)
+
+# ==========================================
+# HỆ ĐIỀU HÀNH
+# ==========================================
+.DS_Store
+Thumbs.db
+*.log
+
+# ==========================================
+# IDE / EDITOR
+# ==========================================
+.vscode/settings.json
+.idea/
+*.swp
+*.swo

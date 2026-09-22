@@ -3,7 +3,7 @@ from django.contrib import admin
 from django import forms
 from django.contrib import messages
 from web3 import Web3
-from .models import Election, Candidate, VoteRecord, WhitelistVoter, SystemLog
+from .models import Election, Candidate, VoteRecord, WhitelistVoter, SystemLog, AdminWallet
 from .services import upload_image_to_ipfs
 
 import json
@@ -43,20 +43,24 @@ class ElectionAdmin(admin.ModelAdmin):
     @admin.action(description="Mở Hòm Phiếu (Bắt đầu cho vote)")
     def make_active(self, request, queryset):
         for obj in queryset:
-            if obj.status == 'pending':
+            if obj.status == 'pending' and obj.tx_status != 'broadcasted':
                 obj.tx_status = 'pending'
                 obj.save()
                 django_rq.enqueue(change_election_status_task, obj.id, 'active')
                 messages.info(request, f"Đang đẩy lệnh Mở hòm phiếu {obj.name} xuống Background Task...")
+            elif obj.tx_status == 'broadcasted':
+                messages.warning(request, f"Hòm phiếu {obj.name} đang có giao dịch chờ xác nhận, vui lòng đợi.")
                     
     @admin.action(description="Đóng Hòm Phiếu (Ngừng vote)")
     def make_closed(self, request, queryset):
         for obj in queryset:
-            if obj.status == 'active':
+            if obj.status == 'active' and obj.tx_status != 'broadcasted':
                 obj.tx_status = 'pending'
                 obj.save()
                 django_rq.enqueue(change_election_status_task, obj.id, 'closed')
                 messages.info(request, f"Đang đẩy lệnh Đóng hòm phiếu {obj.name} xuống Background Task...")
+            elif obj.tx_status == 'broadcasted':
+                messages.warning(request, f"Hòm phiếu {obj.name} đang có giao dịch chờ xác nhận, vui lòng đợi.")
 
 @admin.register(Candidate)
 class CandidateAdmin(admin.ModelAdmin):
@@ -111,3 +115,39 @@ class VoteRecordAdmin(admin.ModelAdmin):
         return False
     def has_change_permission(self, request, obj=None):
         return False
+
+
+@admin.register(AdminWallet)
+class AdminWalletAdmin(admin.ModelAdmin):
+    list_display  = ('wallet_display', 'label', 'is_active', 'added_at')
+    list_editable = ('label', 'is_active')
+    list_filter   = ('is_active',)
+    search_fields = ('wallet_address', 'label')
+    readonly_fields = ('added_at',)
+    actions = ['activate_wallets', 'deactivate_wallets']
+
+    def wallet_display(self, obj):
+        short = obj.wallet_address[:10] + '...' + obj.wallet_address[-6:]
+        return short
+    wallet_display.short_description = 'Wallet Address'
+
+    def save_model(self, request, obj, form, change):
+        # Tự chuẩn hóa chữ thường và kiểm tra định dạng địa chỉ
+        obj.wallet_address = obj.wallet_address.strip().lower()  # LOWERCASE để nhất quán với logic so sánh
+        import re
+        if not re.match(r'^0x[a-fA-F0-9]{40}$', obj.wallet_address):
+            from django.core.exceptions import ValidationError
+            self.message_user(request, f'Địa chỉ ví không hợp lệ: {obj.wallet_address}', level='error')
+            return
+        super().save_model(request, obj, form, change)
+        messages.success(request, f"Đã lưu admin wallet {obj.wallet_address[:12]}...")
+
+    @admin.action(description="✅ Kích hoạt các ví đã chọn")
+    def activate_wallets(self, request, queryset):
+        count = queryset.update(is_active=True)
+        messages.success(request, f"Đã kích hoạt {count} admin wallet.")
+
+    @admin.action(description="🚧 Vô hiệu hoá các ví đã chọn")
+    def deactivate_wallets(self, request, queryset):
+        count = queryset.update(is_active=False)
+        messages.warning(request, f"Đã vô hiệu hoá {count} admin wallet.")

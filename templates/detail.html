@@ -1,24 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <title>Chi Tiết Bầu Cử</title>
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
     <link rel="stylesheet" href="/static/css/style.css">
-    
+
     <!-- Toastify CSS -->
-    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
-    
-    <!-- Thư viện Ethers.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
-    <!-- Thư viện Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Toastify JS -->
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <link rel="stylesheet" type="text/css"
+          href="https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.css"
+          crossorigin="anonymous">
+
+    <!-- Ethers.js v6.7.0 — SRI hash từ cdnjs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"
+            integrity="sha512-bLwLr3lzJN1cvtbClBMhKDyaD0uocWmphiqO8v0w3/z/XqUwzkM00gZq7BV3dQS9mQu0rarZMTsxlcnIHszElA=="
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"></script>
+
+    <!-- Chart.js v4.4.3 — pin version cụ thể -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"
+            crossorigin="anonymous"></script>
+
+    <!-- Toastify JS v1.12.0 — pin version cụ thể -->
+    <script type="text/javascript"
+            src="https://cdn.jsdelivr.net/npm/toastify-js@1.12.0"
+            crossorigin="anonymous"></script>
 </head>
 <body>
     <div class="container">
         <a href="/" class="btn" style="background: var(--bg-color); color: var(--text-primary); border: 1px solid var(--border-color); box-shadow: none; margin-bottom: 20px;">⬅ Quay lại Trang Chủ</a>
-        
+
         <div class="header-flex" style="margin-bottom: 20px;">
             <div>
                 <h1 id="electionName" style="margin-bottom: 10px;">Đang tải...</h1>
@@ -29,25 +40,33 @@
                 <p id="walletAddress" style="color: var(--success-color); font-weight: bold; margin-top: 10px;"></p>
             </div>
         </div>
-        
+
+        <!-- Hộp xác nhận TxHash sau khi vote thành công (ẩn mặc định) -->
+        <div id="voteConfirmationBox" style="display: none;"></div>
+
         {% if request.user.is_staff %}
-        <div id="adminWhitelistSection" style="display: none; background: rgba(88, 166, 255, 0.1); border: 1px solid #58a6ff; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-            <h3 style="margin-bottom: 10px; color: #58a6ff;">🛡️ Quản lý Whitelist (Admin)</h3>
-            <p style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 15px;">Thêm địa chỉ ví vào danh sách cử tri (chỉ áp dụng cho Hòm phiếu Private).</p>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <input type="text" id="whitelistAddress" placeholder="0x..." style="flex: 1; min-width: 250px; padding: 12px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-primary);">
-                <button onclick="addWhitelist()" id="btnWhitelist" class="btn" style="background: #58a6ff;">➕ Thêm Cử Tri</button>
+        <!-- Admin Panel: Whitelist Management -->
+        <div id="adminWhitelistSection" style="display: none; background: rgba(88, 166, 255, 0.07); border: 1px solid #58a6ff; border-radius: 12px; padding: 24px; margin-bottom: 20px;">
+            <h3 style="margin-bottom: 4px; color: #2563eb;">🛡️ Quản lý Whitelist (Admin)</h3>
+            <p style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 16px;">Thêm địa chỉ ví cử tri vào danh sách được phép bỏ phiếu.</p>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px;">
+                <input type="text" id="whitelistAddress" placeholder="0x..." style="flex: 1; min-width: 250px; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary);">
+                <button onclick="addWhitelist()" id="btnWhitelist" class="btn" style="background: #2563eb;">➕ Thêm Cử Tri</button>
             </div>
-            <p id="whitelistStatus" style="margin-top: 10px; font-size: 0.9em;"></p>
+            <p id="whitelistStatus" style="font-size: 0.88em; min-height: 20px;"></p>
+
+            <!-- Danh sách whitelist đã thêm -->
+            <div id="whitelistTableContainer"></div>
         </div>
         {% endif %}
-        
+
         <hr>
 
         <div style="display: flex; flex-wrap: wrap; gap: 30px;">
             <!-- Cột Biểu đồ -->
-            <div class="card" style="flex: 1; min-width: 300px; max-width: 400px; margin: 0 auto;">
-                <h3 style="text-align: center; margin-bottom: 20px;">Thống Kê Phiếu Bầu</h3>
+            <div class="card" style="flex: 1; min-width: 280px; max-width: 380px; margin: 0 auto;">
+                <h3 style="text-align: center; margin-bottom: 20px;">📊 Thống Kê Phiếu Bầu</h3>
                 <canvas id="voteChart"></canvas>
             </div>
 
@@ -56,6 +75,22 @@
                 <h2>👥 Danh Sách Ứng Viên</h2>
                 <div id="candidateList" class="candidate-grid" style="margin-top: 15px;"></div>
             </div>
+        </div>
+
+        <!-- Link xác minh phiếu ở cuối trang -->
+        <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+            <p style="color: var(--text-secondary); font-size: 0.9em;">Đã bỏ phiếu? Bạn có thể tự xác minh phiếu của mình bất kỳ lúc nào.</p>
+            <a href="/verify/" class="btn" style="background: rgba(22,163,74,0.1); border: 1px solid #16a34a; color: #16a34a; font-size: 0.9rem;">🔍 Xác Minh Phiếu Bầu</a>
+        </div>
+
+        <!-- Danh sách cử tri đã tham gia -->
+        <div class="card" style="margin-top: 40px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0;">🗳️ Danh Sách Cử Tri Tham Gia</h3>
+                <span id="voterCount" style="font-size: 0.85em; color: var(--text-secondary);"></span>
+            </div>
+            <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 16px;">Danh sách các địa chỉ ví đã bỏ phiếu trong cuộc bầu cử này. Phiếu bầu được bảo mật — chỉ hiển thị danh tính tham gia, không tiết lộ lựa chọn.</p>
+            <div id="voterList"><p style="color: var(--text-secondary); text-align: center;">Chưa có phiếu bầu nào.</p></div>
         </div>
 
     </div>

@@ -1,5 +1,7 @@
 import os
 import json
+import logging
+import threading
 from web3 import Web3
 from django_rq import job
 from django.conf import settings
@@ -7,6 +9,8 @@ from .models import Election, Candidate, WhitelistVoter, SystemLog
 from .utils import get_factory_address
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+
+logger = logging.getLogger('election.tasks')
 
 # --- WEB3 SETUP ---
 w3 = Web3(Web3.HTTPProvider(os.environ.get('ALCHEMY_RPC_URL')))
@@ -21,20 +25,54 @@ with open(os.path.join(settings.BASE_DIR, "Factory_ABI.json"), "r", encoding="ut
 with open(os.path.join(settings.BASE_DIR, "Election_ABI.json"), "r", encoding="utf-8") as f:
     ELECTION_ABI = json.load(f)
 
-import threading
+# --- NONCE MANAGER: Redis INCR (an toàn khi scale nhiều worker) ---
+# Fallback về in-memory threading.Lock nếu Redis không có sẵn
+REDIS_NONCE_KEY = "blockchain_voting:admin_nonce"
+_nonce_lock = threading.Lock()
+_nonce_memory = None
 
-NONCE_LOCK = threading.Lock()
-CURRENT_NONCE = None
+def _get_redis_client():
+    """Lấy Redis client từ django-rq connection pool."""
+    try:
+        import django_rq
+        return django_rq.get_connection('default')
+    except Exception:
+        return None
+
+# Lua script: so sánh và cập nhật nonce trong 1 thao tác atomic duy nhất
+# Trả về nonce mới nhất (safe to use)
+NONCE_LUA = """
+local cur = redis.call('GET', KEYS[1])
+if cur == false or tonumber(cur) < tonumber(ARGV[1]) then
+    redis.call('SET', KEYS[1], ARGV[1])
+    return tonumber(ARGV[1])
+else
+    return redis.call('INCR', KEYS[1])
+end
+"""
 
 def get_next_nonce():
-    global CURRENT_NONCE
-    with NONCE_LOCK:
-        onchain = w3.eth.get_transaction_count(admin_address, 'pending')
-        if CURRENT_NONCE is None or onchain > CURRENT_NONCE:
-            CURRENT_NONCE = onchain
-        else:
-            CURRENT_NONCE += 1
-        return CURRENT_NONCE
+    """
+    Lấy nonce tiếp theo một cách an toàn:
+    - Ưu tiên Redis Lua script (atomic, an toàn khi nhiều worker)
+    - Fallback về threading.Lock in-memory (1 worker)
+    """
+    global _nonce_memory
+    onchain = w3.eth.get_transaction_count(admin_address, 'pending')
+
+    redis_client = _get_redis_client()
+    if redis_client:
+        # Lua script chạy atomic trên Redis server — không có race condition
+        new_nonce = redis_client.eval(NONCE_LUA, 1, REDIS_NONCE_KEY, onchain)
+        return int(new_nonce)
+    else:
+        # Fallback: in-memory với threading.Lock
+        with _nonce_lock:
+            if _nonce_memory is None or onchain > _nonce_memory:
+                _nonce_memory = onchain
+            else:
+                _nonce_memory += 1
+            return _nonce_memory
 
 def broadcast_update(election_id):
     # Optional: trigger frontend to reload
@@ -92,10 +130,10 @@ def change_election_status_task(election_id, new_status):
         signed_tx = w3.eth.account.sign_transaction(tx, private_key=admin_private_key)
         tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
         
-        # Lưu nháp status dự kiến vào tx_error để indexer biết mà cập nhật khi thành công
         election.tx_hash = tx_hash.hex()
         election.tx_status = 'broadcasted'
-        election.tx_error = f"pending_status:{new_status}"
+        # tx_error để trống — Indexer sẽ đọc ElectionStatusChanged event từ receipt để cập nhật status
+        election.tx_error = ''
         SystemLog.objects.create(level='INFO', module='ADMIN', message=f'Đã broadcast lệnh đổi trạng thái hòm phiếu {election.name}. Tx: {tx_hash.hex()}')
     except Exception as e:
         election.tx_status = 'failed'

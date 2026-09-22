@@ -1,18 +1,22 @@
 import os
 import glob
 import json
+import logging
 from django.conf import settings
+
+logger = logging.getLogger('election.utils')
 
 def get_factory_address():
     # 1. Ưu tiên biến môi trường (Ví dụ cấu hình trên Render)
     env_addr = os.getenv("FACTORY_ADDRESS")
-    if env_addr: 
+    if env_addr:
         return env_addr
 
     # 2. Đọc từ file của Hardhat Ignition (khi chạy local/dev)
     try:
         # settings.BASE_DIR trỏ tới gốc dự án (Blockchain_Project)
-        search_path = os.path.join(settings.BASE_DIR, "ignition", "deployments", "chain-*", "deployed_addresses.json")
+        # Sau khi clean: ignition/ đã di chuyển vào blockchain/ignition/
+        search_path = os.path.join(settings.BASE_DIR, "blockchain", "ignition", "deployments", "chain-*", "deployed_addresses.json")
         files = glob.glob(search_path)
         if files:
             # Sắp xếp file theo thời gian sửa đổi (lấy file mới nhất)
@@ -20,10 +24,11 @@ def get_factory_address():
             with open(latest_file, "r") as f:
                 data = json.load(f)
                 if data:
-                    # Lấy địa chỉ đầu tiên (thường là {"VotingModule#ElectionFactory": "0x..."})
+                    # Lấy địa chỉ đầu tiên (thường là {"FactoryModule#ElectionFactory": "0x..."})
                     return list(data.values())[0]
     except Exception as e:
-        print(f"Warning: Không thể đọc file deployed_addresses.json: {e}")
-        
-    # 3. Giá trị hardcode dự phòng cuối cùng
-    return "0x44F8Db431EA5049D60547777Af54a0D7E46D12DE"
+        logger.warning(f"Không thể đọc file deployed_addresses.json: {e}")
+
+    # 3. Giá trị hardcode dự phòng cuối cùng (cập nhật sau mỗi lần redeploy!)
+    logger.warning("⚠️  Dùng FACTORY_ADDRESS hardcode fallback — đảm bảo đây là contract đúng!")
+    return "0xfC76B1d15f2F889C70cEA40222B7187A9DC3fbf1"

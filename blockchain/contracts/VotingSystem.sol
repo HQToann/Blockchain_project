@@ -18,8 +18,14 @@ contract Election {
     mapping(address => bool) public hasVoted;
     mapping(address => bool) public whitelist;
 
-    event VoteCast(uint256 indexed candidateId);
+    // --- Events ---
+    // voter + candidateId trong VoteCast: Indexer không cần gọi get_transaction() để lấy địa chỉ người vote
+    event VoteCast(address indexed voter, uint256 indexed candidateId);
     event CandidateAdded(uint256 indexed candidateId, string name);
+    // Indexer dùng event này để cập nhật status Election trong DB — thay thế hack pending_status
+    event ElectionStatusChanged(bool indexed isOpen);
+    // Xác nhận whitelist thành công on-chain — Indexer không cần polling tx_status
+    event VoterAddedToWhitelist(address indexed voter);
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "Loi: Chi Admin moi duoc thuc hien");
@@ -46,17 +52,20 @@ contract Election {
     }
 
     function addToWhitelist(address[] memory _voters) public onlyAdmin {
-        for(uint i = 0; i < _voters.length; i++) {
+        for (uint i = 0; i < _voters.length; i++) {
             whitelist[_voters[i]] = true;
+            emit VoterAddedToWhitelist(_voters[i]);
         }
     }
 
     function startElection() public onlyAdmin {
         isOpen = true;
+        emit ElectionStatusChanged(true);
     }
 
     function stopElection() public onlyAdmin {
         isOpen = false;
+        emit ElectionStatusChanged(false);
     }
 
     function vote(uint256 _candidateId) public onlyWhileOpen {
@@ -70,7 +79,8 @@ contract Election {
         hasVoted[msg.sender] = true;
         candidates[_candidateId].voteCount++;
 
-        emit VoteCast(_candidateId);
+        // Phát cả voter address — Indexer lấy được ngay, tiết kiệm 1 RPC call get_transaction()
+        emit VoteCast(msg.sender, _candidateId);
     }
 }
 

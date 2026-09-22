@@ -1,5 +1,6 @@
 services:
-  # 2. Dịch vụ Web Chính (Django)
+  # Web Service chính — chạy Django + RQ Worker + Indexer cùng 1 process (Free plan)
+  # Nếu muốn tách riêng: tạo thêm service type: worker với startCommand: python manage.py rqworker default
   - type: web
     name: voting-dapp-web
     env: python
@@ -9,20 +10,47 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
-      - key: REDIS_URL
-        value: redis://red-dahpp6942hec739vn7gg:6379
+
+      # === DJANGO ===
       - key: DJANGO_SECRET_KEY
-        generateValue: true
+        generateValue: true        # Render tự sinh secret key
+      - key: DEBUG
+        value: "False"
+      - key: SESSION_COOKIE_AGE
+        value: "86400"             # Session 24 giờ
+
+      # === SECRET NỘI BỘ (Indexer → Django webhook) ===
+      - key: INTERNAL_API_SECRET
+        generateValue: true        # Tách riêng, KHÔNG dùng chung DJANGO_SECRET_KEY
+
+      # === DATABASE ===
       - key: USE_SQLITE
         value: "False"
       - key: DATABASE_URL
-        sync: false # Nhập tay từ Supabase trên Dashboard
+        sync: false                # Nhập tay từ Supabase Dashboard
+
+      # === REDIS ===
+      - key: REDIS_URL
+        value: redis://red-dahpp6942hec739vn7gg:6379
+
+      # === BLOCKCHAIN ===
       - key: ALCHEMY_RPC_URL
         sync: false
       - key: PRIVATE_KEY
-        sync: false
-      - key: ADMIN_WALLET_ADDRESS
-        sync: false
+        sync: false                # Private key ví Admin trả gas
+
+      # === ADMIN WALLETS (phân cách bằng dấu phẩy nếu nhiều admin) ===
+      - key: ADMIN_WALLET_ADDRESSES
+        sync: false                # VD: 0xAbc...,0xDef...
+
+      # === IPFS ===
       - key: PINATA_JWT
         sync: false
 
+      # === BLOCKCHAIN CONTRACT (cập nhật sau mỗi lần redeploy contract mới) ===
+      - key: FACTORY_ADDRESS
+        value: "0xfC76B1d15f2F889C70cEA40222B7187A9DC3fbf1"
+
+      # === INDEXER (tuỳ chọn: block bắt đầu scan, bỏ trống để dùng block hiện tại) ===
+      # - key: START_BLOCK
+      #   value: "7000000"

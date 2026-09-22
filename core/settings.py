@@ -28,8 +28,21 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-default')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+    'voting-dapp-web.onrender.com',
+    '127.0.0.1',
+    'localhost',
+]
 CSRF_TRUSTED_ORIGINS = ['https://voting-dapp-web.onrender.com']
+
+# HTTPS Security (Render cung cấp HTTPS, cần Django biết để set Secure flag trên cookies)
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # Render dùng reverse proxy
 
 # Application definition
 
@@ -207,6 +220,7 @@ JAZZMIN_SETTINGS = {
         "election.VoteRecord": "fas fa-vote-yea",
         "election.WhitelistVoter": "fas fa-id-card",
         "election.SystemLog": "fas fa-terminal",
+        "election.AdminWallet": "fas fa-shield-alt",
     },
     "default_icon_parents": "fas fa-chevron-circle-right",
     "default_icon_children": "fas fa-circle",

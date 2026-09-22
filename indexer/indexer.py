@@ -1,10 +1,23 @@
 import os
 import sys
 import time
+import json
+import logging
 import django
 from web3 import Web3
-from django.db.models import F  # Import F để cộng phiếu an toàn (tránh race condition)
+from django.db.models import F
 import requests
+
+# --- CẤU HÌNH LOGGING ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s %(name)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.StreamHandler(sys.stdout),  # Output ra console (Render logs)
+    ]
+)
+logger = logging.getLogger('indexer')
 
 # Cấu hình để script chạy độc lập có thể truy cập Database của Django
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -14,23 +27,21 @@ django.setup()
 from django.db import transaction, close_old_connections
 from election.models import Election, Candidate, VoteRecord, SystemLog, IndexerState, WhitelistVoter
 
-# Tải cấu hình từ .env
 from dotenv import load_dotenv
 load_dotenv()
 
 w3 = Web3(Web3.HTTPProvider(os.getenv('ALCHEMY_RPC_URL')))
 
-import json
-
-# Tải ABI từ file JSON tĩnh ở thư mục gốc (Vì thư mục artifacts không được push lên GitHub)
+# Tải ABI từ file JSON tĩnh ở thư mục gốc
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
-    with open("Factory_ABI.json", "r", encoding="utf-8") as f:
+    with open(os.path.join(BASE_DIR, "Factory_ABI.json"), "r", encoding="utf-8") as f:
         FACTORY_ABI = json.load(f)
 
-    with open("Election_ABI.json", "r", encoding="utf-8") as f:
+    with open(os.path.join(BASE_DIR, "Election_ABI.json"), "r", encoding="utf-8") as f:
         ELECTION_ABI = json.load(f)
 except FileNotFoundError:
-    print("❌ Lỗi: Không tìm thấy file Factory_ABI.json hoặc Election_ABI.json ở thư mục gốc!")
+    logger.critical("❌ Không tìm thấy file Factory_ABI.json hoặc Election_ABI.json ở thư mục gốc!")
     sys.exit(1)
 
 # Địa chỉ Factory Contract (tự động trích xuất từ file deployed_addresses.json)
@@ -50,51 +61,59 @@ def get_last_processed_block():
             return w3.eth.block_number
         return state.last_block
     except Exception as e:
-        print(f"Lỗi lấy trạng thái Indexer từ DB: {e}")
+        logger.error(f"Lỗi lấy trạng thái Indexer từ DB: {e}")
         return w3.eth.block_number
 
 def update_last_block(block_num):
     try:
         IndexerState.objects.filter(key='main').update(last_block=block_num)
     except Exception as e:
-        print(f"Lỗi lưu trạng thái Indexer vào DB: {e}")
+        logger.error(f"Lỗi lưu trạng thái Indexer vào DB: {e}")
 
 from web3.exceptions import TransactionNotFound
 
 def check_broadcasted_transactions():
+    # Giới hạn 50 bản ghi mỗi vòng để tránh ngốn RPC calls khi nhiều tx stuck
     # 1. Election
-    for election in Election.objects.filter(tx_status='broadcasted'):
+    for election in Election.objects.filter(tx_status='broadcasted')[:50]:
         try:
             receipt = w3.eth.get_transaction_receipt(election.tx_hash)
             if receipt.status == 1:
                 election.tx_status = 'confirmed'
-                
-                # Cập nhật địa chỉ contract nếu là tác vụ tạo hòm phiếu
+
+                # TH1: Tạo hòm phiếu mới (chưa có contract_addr)
                 if not election.contract_addr:
                     logs = factory_contract.events.ElectionCreated().process_receipt(receipt)
                     if logs:
                         election.contract_addr = logs[0]['args']['electionAddress']
                         SystemLog.objects.create(level='SUCCESS', module='BLOCKCHAIN', message=f'Tạo hòm phiếu {election.name} thành công. Contract: {election.contract_addr}')
-                # Nếu là tác vụ đổi trạng thái
-                elif election.tx_error and election.tx_error.startswith('pending_status:'):
-                    new_status = election.tx_error.split(':')[1]
-                    election.status = new_status
-                    election.tx_error = ''
-                    SystemLog.objects.create(level='SUCCESS', module='BLOCKCHAIN', message=f'Đổi trạng thái hòm phiếu {election.name} thành {new_status}.')
-                    from election.tasks import broadcast_update
-                    broadcast_update(election.id)
+
+                # TH2: Đổi trạng thái hòm phiếu (dùng event ElectionStatusChanged — KHÔNG dùng hack tx_error)
+                else:
+                    election_contract = w3.eth.contract(
+                        address=election.contract_addr, abi=ELECTION_ABI
+                    )
+                    status_logs = election_contract.events.ElectionStatusChanged().process_receipt(receipt)
+                    if status_logs:
+                        is_open = status_logs[0]['args']['isOpen']
+                        new_status = 'active' if is_open else 'closed'
+                        election.status = new_status
+                        election.tx_error = ''
+                        SystemLog.objects.create(level='SUCCESS', module='BLOCKCHAIN', message=f'Đổi trạng thái hòm phiếu {election.name} thành "{new_status}" qua event.')
+                        from election.tasks import broadcast_update
+                        broadcast_update(election.id)
             else:
                 election.tx_status = 'failed'
                 election.tx_error = 'Transaction Reverted on-chain'
                 SystemLog.objects.create(level='ERROR', module='BLOCKCHAIN', message=f'Giao dịch Election {election.name} bị Reverted!')
             election.save()
         except TransactionNotFound:
-            pass # Vẫn đang pending
+            pass  # Vẫn đang pending
         except Exception as e:
-            print(f"Lỗi kiểm tra receipt Election: {e}")
+            logger.error(f"Lỗi kiểm tra receipt Election: {e}")
 
     # 2. Candidate
-    for candidate in Candidate.objects.filter(tx_status='broadcasted'):
+    for candidate in Candidate.objects.filter(tx_status='broadcasted')[:50]:
         try:
             receipt = w3.eth.get_transaction_receipt(candidate.tx_hash)
             if receipt.status == 1:
@@ -114,10 +133,10 @@ def check_broadcasted_transactions():
         except TransactionNotFound:
             pass
         except Exception as e:
-            print(f"Lỗi kiểm tra receipt Candidate: {e}")
+            logger.error(f"Lỗi kiểm tra receipt Candidate: {e}")
 
     # 3. WhitelistVoter
-    for wl in WhitelistVoter.objects.filter(tx_status='broadcasted'):
+    for wl in WhitelistVoter.objects.filter(tx_status='broadcasted')[:50]:
         try:
             receipt = w3.eth.get_transaction_receipt(wl.tx_hash)
             if receipt.status == 1:
@@ -131,7 +150,7 @@ def check_broadcasted_transactions():
         except TransactionNotFound:
             pass
         except Exception as e:
-            print(f"Lỗi kiểm tra receipt Whitelist: {e}")
+            logger.error(f"Lỗi kiểm tra receipt Whitelist: {e}")
 
 def process_events():
     check_broadcasted_transactions()
@@ -139,7 +158,7 @@ def process_events():
         from_block = get_last_processed_block()
         current_block = w3.eth.block_number
     except Exception as e:
-        print("Lỗi kết nối RPC (Alchemy):", e)
+        logger.error(f"Lỗi kết nối RPC (Alchemy): {e}")
         return
     
     if from_block > current_block:
@@ -150,8 +169,8 @@ def process_events():
     if current_block - from_block > MAX_BLOCK_RANGE:
         current_block = from_block + MAX_BLOCK_RANGE
         
-    print(f"[*] Quét từ block {from_block} đến {current_block}...")
-    has_error = False  # Cờ theo dõi lỗi để tránh mất event (Lỗi #9)
+    logger.info(f"Quét từ block {from_block} → {current_block}...")
+    has_error = False
 
     # 1. Lắng nghe Event: Tạo hòm phiếu mới (ElectionCreated)
     try:
@@ -166,10 +185,10 @@ def process_events():
                 contract_addr=contract_addr,
                 defaults={'name': name, 'status': 'pending', 'is_private': is_private}
             )
-            print(f"✅ Đã tạo cuộc bầu cử mới: {name} ở địa chỉ {contract_addr}")
+            logger.info(f"✅ Hòm phiếu mới: {name} tại {contract_addr}")
             SystemLog.objects.create(level='SUCCESS', module='BLOCKCHAIN', message=f'Event ElectionCreated: Hòm phiếu {name} được tạo tại {contract_addr[:10]}...')
     except Exception as e:
-        print("Lỗi quét Factory:", e)
+        logger.error(f"Lỗi quét Factory: {e}")
         has_error = True
 
     # 2. Lắng nghe Event: Bỏ phiếu (VoteCast) trên tất cả hòm phiếu đang hoạt động
@@ -191,14 +210,12 @@ def process_events():
                         if VoteRecord.objects.filter(tx_hash=tx_hash).exists():
                             continue # Bỏ qua nếu đã xử lý
                         
-                        # (Tuỳ chọn) Gọi get_transaction để lấy địa chỉ người vote
-                        # Tránh lạm dụng để không dính Rate Limit
-                        tx_info = w3.eth.get_transaction(tx_hash)
-                        voter_address = tx_info['from']
+                        # Lấy voter address trực tiếp từ event (KHÔNG cần gọi get_transaction() — tiết kiệm 1 RPC call/phiếu)
+                        voter_address = evt.args.voter
                         
                         # KIỂM TRA: Ứng viên phải tồn tại trong DB, nếu không thì bỏ qua phiếu này (Ngăn lỗi nuốt phiếu)
                         if not Candidate.objects.filter(election=election, candidate_id=candidate_id).exists():
-                            print(f"⚠️ Cảnh báo: Candidate {candidate_id} chưa tồn tại trong DB, bỏ qua tx {tx_hash}")
+                            logger.warning(f"⚠️  Candidate ID {candidate_id} chưa có trong DB, bỏ qua tx {tx_hash[:10]}")
                             continue
 
                         # Ghi nhận lịch sử (KHÔNG lưu candidate_id)
@@ -215,38 +232,37 @@ def process_events():
                             candidate_id=candidate_id
                         ).update(vote_count=F('vote_count') + 1)
                         
-                        print(f"🔥 Cập nhật phiếu thành công cho Tx: {tx_hash}")
+                        logger.info(f"🔥 Phếu mới xác nhận: Tx {tx_hash[:10]}... (Candidate {candidate_id})")
                         SystemLog.objects.create(level='SUCCESS', module='BLOCKCHAIN', message=f'Event VoteCast: Có phiếu mới cho Ứng viên ID {candidate_id}. Tx: {tx_hash[:10]}...')
                         
                         # --- Bắn tín hiệu WebSocket (Real-time) cho Frontend qua API ---
                         try:
                             server_port = os.environ.get('PORT', 8000)
-                            secret = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-default')
+                            # FIX: ưu tiên INTERNAL_API_SECRET, fallback về DJANGO_SECRET_KEY
+                            secret = os.environ.get('INTERNAL_API_SECRET') or os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-default')
                             requests.post(f"http://127.0.0.1:{server_port}/api/internal/notify_vote/", json={
                                 "election_id": election.id,
                                 "candidate_id": candidate_id,
                                 "tx_hash": tx_hash
                             }, headers={'X-Internal-Secret': secret}, timeout=2)
                         except Exception as req_err:
-                            print(f"Lỗi gọi API Webhook: {req_err}")
+                            logger.warning(f"Lỗi gọi Webhook notify_vote: {req_err}")
                 except Exception as db_err:
-                    print(f"Lỗi Database Transaction: {db_err}")
+                    logger.error(f"Lỗi Database Transaction khi xử lý phiếu: {db_err}")
                     has_error = True
                     
         except Exception as e:
-            print("Lỗi quét Election:", e)
+            logger.error(f"Lỗi quét Election {election.id}: {e}")
             has_error = True
 
     # Chỉ cập nhật block nếu không có lỗi nào xảy ra (Tránh nhảy block khi bị RPC Rate Limit)
     if not has_error:
         update_last_block(current_block + 1)
 
-# Vòng lặp chạy vô hạn 24/7
+# Vòng lập chạy vô hạn 24/7
 if __name__ == "__main__":
-    print("🚀 Khởi động Indexer...")
+    logger.info("🚀 Indexer khởi động thành công")
     while True:
-        # Đóng các kết nối CSDL đã cũ để tránh lỗi "server closed the connection unexpectedly" trên PostgreSQL
         close_old_connections()
-        
         process_events()
-        time.sleep(5) # Nghỉ 5 giây tránh dính rate-limit của Alchemy
+        time.sleep(5)  # Nghỉ 5 giây tránh rate-limit Alchemy

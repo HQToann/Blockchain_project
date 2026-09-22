@@ -26,10 +26,10 @@ describe("Election Smart Contract", function () {
     await election.addToWhitelist([addr1.address]);
     await election.startElection();
     
-    // Lần 1: Vote thành công
+    // Lần 1: Vote thành công — VoteCast giờ có thêm voter address
     await expect(election.connect(addr1).vote(0))
       .to.emit(election, "VoteCast")
-      .withArgs(0);
+      .withArgs(addr1.address, 0);  // Updated: thêm voter address
 
     const candidate = await election.candidates(0);
     expect(candidate.voteCount).to.equal(1n);
@@ -54,5 +54,21 @@ describe("Election Smart Contract", function () {
     await election.stopElection();
     
     await expect(election.connect(addr1).vote(0)).to.be.revertedWith("Loi: Hom phieu chua mo hoac da dong");
+  });
+
+  it("ElectionStatusChanged event nên phát đúng khi mở/đóng", async function () {
+    await expect(election.startElection())
+      .to.emit(election, "ElectionStatusChanged")
+      .withArgs(true);
+
+    await expect(election.stopElection())
+      .to.emit(election, "ElectionStatusChanged")
+      .withArgs(false);
+  });
+
+  it("VoterAddedToWhitelist event nên phát đúng khi thêm whitelist", async function () {
+    await expect(election.addToWhitelist([addr1.address, addr2.address]))
+      .to.emit(election, "VoterAddedToWhitelist")
+      .withArgs(addr1.address);
   });
 });

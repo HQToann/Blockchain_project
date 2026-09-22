@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Hệ Thống Bầu Cử Phân Tán</title>
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -19,26 +20,32 @@
         <div id="syncWarning" style="display: none; background: #fff3cd; color: #856404; padding: 10px; border-radius: 6px; border-left: 4px solid #ffeeba; margin-bottom: 20px; font-size: 0.9em;">
             ⚠️ <strong>Cảnh báo:</strong> Trình đồng bộ hoá (Indexer) có vẻ đang mất kết nối hoặc phản hồi chậm. Dữ liệu hiển thị có thể chưa phải là mới nhất.
         </div>
-    <div id="electionList"><p>Đang tải...</p></div>
+        <div id="electionList"><p>Đang tải...</p></div>
+        <div id="paginationControls"></div>
 
     <script>
-    async function loadElections() {
-        const res = await fetch('/api/elections/');
+    let currentPage = 1;
+    const PAGE_LIMIT = 9;  // Số cuộc bầu cử mỗi trang
+
+    async function loadElections(page = 1) {
+        currentPage = page;
+        const res = await fetch(`/api/elections/?page=${page}&limit=${PAGE_LIMIT}`);
         const data = await res.json();
         const container = document.getElementById('electionList');
         const syncWarning = document.getElementById('syncWarning');
-        
+
         if (data.is_lagging) {
             syncWarning.style.display = 'block';
         } else {
             syncWarning.style.display = 'none';
         }
-        
+
         if (!data.elections || data.elections.length === 0) {
             container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Chưa có cuộc bầu cử nào được tạo.</p>';
+            document.getElementById('paginationControls').innerHTML = '';
             return;
         }
-        
+
         container.className = "election-grid";
         container.innerHTML = data.elections.map(e => {
             let statusBadge = e.status;
@@ -60,13 +67,37 @@
             </div>
             `;
         }).join('');
+
+        // --- Render phân trang ---
+        const pg = data.pagination;
+        const totalPages = Math.ceil(pg.total / pg.limit);
+        const paginationEl = document.getElementById('paginationControls');
+        if (pg.total <= PAGE_LIMIT) {
+            paginationEl.innerHTML = '';
+        } else {
+            paginationEl.innerHTML = `
+                <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-top:24px;">
+                    <button onclick="loadElections(${page - 1})" class="btn"
+                        ${!pg.has_prev ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}>
+                        ← Trang trước
+                    </button>
+                    <span style="color:var(--text-secondary); font-size:0.9em;">
+                        Trang ${pg.page}/${totalPages} &nbsp;·&nbsp; ${pg.total} cuộc
+                    </span>
+                    <button onclick="loadElections(${page + 1})" class="btn"
+                        ${!pg.has_next ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}>
+                        Trang sau →
+                    </button>
+                </div>
+            `;
+        }
     }
-    
-    
+
+
     function setupWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws/election/all/`);
-        
+
         ws.onmessage = function(e) {
             const data = JSON.parse(e.data);
             if (data.type === 'NEW_VOTE') {
@@ -75,7 +106,7 @@
                 if (voteCountSpan) {
                     let current = parseInt(voteCountSpan.innerText) || 0;
                     voteCountSpan.innerText = current + 1;
-                    
+
                     // Hiệu ứng chớp sáng khi có phiếu mới
                     voteCountSpan.style.color = '#fff';
                     voteCountSpan.style.textShadow = '0 0 15px var(--success-color)';
@@ -86,12 +117,12 @@
                 }
             }
         };
-        
+
         ws.onclose = function() {
             setTimeout(setupWebSocket, 3000); // Tự kết nối lại sau 3s nếu mất mạng
         };
     }
-    
+
     window.onload = () => {
         loadElections();
         setupWebSocket();

@@ -1,4 +1,6 @@
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 class Election(models.Model):
     contract_addr = models.CharField(max_length=42, unique=True, null=True, blank=True) # Địa chỉ sinh ra từ Factory
@@ -69,6 +71,24 @@ class SystemLog(models.Model):
     def __str__(self):
         return f"[{self.get_level_display()}] {self.module}: {self.message[:50]}"
 
+
+# --- Auto-rotation: giữ tối đa 1000 bản ghi SystemLog mới nhất ---
+MAX_SYSTEM_LOGS = 1000
+
+@receiver(post_save, sender=SystemLog)
+def trim_system_logs(sender, instance, created, **kwargs):
+    """Xóa log cũ khi số bản ghi vượt MAX_SYSTEM_LOGS."""
+    if created:
+        count = SystemLog.objects.count()
+        if count > MAX_SYSTEM_LOGS:
+            # Lấy id của các bản ghi quá giới hạn (cũ nhất)
+            oldest_ids = (
+                SystemLog.objects
+                .order_by('timestamp')
+                .values_list('id', flat=True)[:count - MAX_SYSTEM_LOGS]
+            )
+            SystemLog.objects.filter(id__in=list(oldest_ids)).delete()
+
 class IndexerState(models.Model):
     key = models.CharField(max_length=50, unique=True, default='main')
     last_block = models.PositiveBigIntegerField(default=0)
@@ -76,3 +96,31 @@ class IndexerState(models.Model):
 
     def __str__(self):
         return f"State: {self.key} - Block: {self.last_block}"
+
+
+class AdminWallet(models.Model):
+    """Danh sách ví được phép đăng nhập Admin — quản lý trực tiếp từ Django Admin UI."""
+    wallet_address = models.CharField(
+        max_length=42, unique=True,
+        help_text="Địa chỉ ví Ethereum (0x..., 42 ký tự)"
+    )
+    label = models.CharField(
+        max_length=100, blank=True, default='',
+        help_text="Tên gợi nhớ (VD: Admin chính, Kiểm soát viên...)"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Tắt để tạm thời thu hồi quyền mà không xóa"
+    )
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-added_at']
+        verbose_name = "Admin Wallet"
+        verbose_name_plural = "Admin Wallets"
+
+    def __str__(self):
+        label = f" ({self.label})" if self.label else ""
+        status = "✅" if self.is_active else "🚫"
+        short = self.wallet_address[:8] + "..." + self.wallet_address[-6:]
+        return f"{status} {short}{label}"
